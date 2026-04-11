@@ -1,121 +1,96 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useStudio } from './hooks/useStudio';
+import Header from './components/Header';
+import PatchbayView from './components/PatchbayView';
+import ComponentInspector from './components/ComponentInspector';
+import AnalysisPanel from './components/AnalysisPanel';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const {
+    state,
+    setPerspective,
+    selectMic,
+    selectPreamp,
+    addInsert,
+    addParallel,
+    removeInsert,
+    removeParallel,
+    reorderInserts,
+    inspect,
+    clearChain,
+    equalizers,
+    outboardProcessors,
+  } = useStudio();
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="h-screen h-[100svh] flex flex-col bg-zinc-950 text-zinc-200 overflow-hidden">
+      <Header
+        perspective={state.perspective}
+        onPerspective={setPerspective}
+      />
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      <div className="relative flex flex-1 overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 opacity-60">
+          <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-amber-500/8 blur-3xl" />
+          <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-cyan-500/8 blur-3xl" />
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        {/* Main content area */}
+        <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+          <PatchbayView
+            perspective={state.perspective}
+            selectedMic={state.selectedMic}
+            selectedPreamp={state.selectedPreamp}
+            insertChain={state.insertChain}
+            parallelChain={state.parallelChain}
+            analysis={state.analysis}
+            onSelectMic={selectMic}
+            onSelectPreamp={selectPreamp}
+            onAddInsert={addInsert}
+            onAddParallel={addParallel}
+            onRemoveInsert={removeInsert}
+            onRemoveParallel={removeParallel}
+            onReorderInserts={reorderInserts}
+            onInspect={inspect}
+            equalizers={equalizers}
+            outboardProcessors={outboardProcessors}
+          />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+          {/* Bottom analysis strip */}
+          <AnalysisPanel
+            perspective={state.perspective}
+            analysis={state.analysis}
+            routeSummary={state.routeSummary}
+            perspectiveInsight={state.perspectiveInsights[state.perspective]}
+            selectedMic={state.selectedMic}
+            selectedPreamp={state.selectedPreamp}
+            insertChain={state.insertChain}
+            parallelChain={state.parallelChain}
+            onClearChain={clearChain}
+          />
+        </div>
+
+        {/* Component Inspector */}
+        {state.inspectedId && (
+          <>
+            <button
+              type="button"
+              aria-label="Close inspector"
+              onClick={() => inspect(null)}
+              className="fixed inset-0 z-20 bg-zinc-950/70 backdrop-blur-sm lg:hidden"
+            />
+
+            <aside className="fixed inset-x-0 bottom-0 top-20 z-30 overflow-y-auto rounded-t-2xl border border-zinc-800 bg-zinc-950/96 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:bg-zinc-950/72 lg:shadow-none lg:backdrop-blur shrink-0">
+              <ComponentInspector
+                perspective={state.perspective}
+                inspectedId={state.inspectedId}
+                onInspect={inspect}
+                onClose={() => inspect(null)}
+              />
+            </aside>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
-export default App
+export default App;
