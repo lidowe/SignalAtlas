@@ -21,6 +21,22 @@ interface AlternativeOption {
   component: InspectableComponent;
 }
 
+function buildOverview(component: InspectableComponent, perspective: Perspective): { title: string; summary: string; supporting?: string } {
+  if (perspective === 'technical') {
+    return {
+      title: 'Unit Details',
+      summary: component.engineering,
+      supporting: 'heritage' in component ? component.heritage : undefined,
+    };
+  }
+
+  return {
+    title: 'Unit Details',
+    summary: component.character,
+    supporting: 'heritage' in component ? component.heritage : undefined,
+  };
+}
+
 function microphoneFamilyKey(mic: Microphone): string | null {
   const text = `${mic.name} ${mic.heritage ?? ''}`.toLowerCase();
 
@@ -113,6 +129,17 @@ function DescriptiveList({
         ))}
       </div>
     </div>
+  );
+}
+
+function OverviewSection({ component, perspective }: { component: InspectableComponent; perspective: Perspective }) {
+  const overview = buildOverview(component, perspective);
+
+  return (
+    <Section title={overview.title}>
+      <p className="text-sm text-zinc-300 leading-relaxed">{overview.summary}</p>
+      {overview.supporting && <p className="mt-2 text-xs leading-relaxed text-zinc-500 italic">{overview.supporting}</p>}
+    </Section>
   );
 }
 
@@ -381,9 +408,10 @@ function MicInspector({ mic, perspective }: { mic: Microphone; perspective: Pers
         <div className="text-xs text-zinc-500">{mic.vendor} · {mic.type} · {mic.qty}× available</div>
       </div>
 
+      <OverviewSection component={mic} perspective={perspective} />
+
       {perspective === 'musician' && (
         <Section title="Character">
-          <p className="text-sm text-zinc-300 leading-relaxed">{mic.character}</p>
           <div className="mt-2">
             <DescriptiveList title="Likely tendencies" items={mic.tendencies} tone="bg-amber-900/20 text-amber-300 border-amber-700/30" />
           </div>
@@ -429,12 +457,6 @@ function MicInspector({ mic, perspective }: { mic: Microphone; perspective: Pers
           </Section>
         </>
       )}
-
-      {mic.heritage && (
-        <Section title="Heritage">
-          <p className="text-xs text-zinc-400 italic">{mic.heritage}</p>
-        </Section>
-      )}
     </div>
   );
 }
@@ -447,9 +469,10 @@ function PreampInspector({ pre, perspective }: { pre: Preamp; perspective: Persp
         <div className="text-xs text-zinc-500">{pre.vendor} · {pre.topology} · {pre.channels}ch</div>
       </div>
 
+      <OverviewSection component={pre} perspective={perspective} />
+
       {perspective === 'musician' && (
         <Section title="Character">
-          <p className="text-sm text-zinc-300 leading-relaxed">{pre.character}</p>
           <div className="mt-2">
             <DescriptiveList title="Likely tendencies" items={pre.tendencies} tone="bg-blue-900/20 text-blue-300 border-blue-700/30" />
           </div>
@@ -507,9 +530,10 @@ function CompInspector({ comp, perspective }: { comp: Compressor; perspective: P
         <div className="text-xs text-zinc-500">{comp.vendor} · {comp.topology} · {comp.channels}ch</div>
       </div>
 
+      <OverviewSection component={comp} perspective={perspective} />
+
       {perspective === 'musician' && (
         <Section title="Character">
-          <p className="text-sm text-zinc-300 leading-relaxed">{comp.character}</p>
           <div className="mt-2">
             <DescriptiveList title="Likely tendencies" items={comp.tendencies} tone="bg-purple-900/20 text-purple-300 border-purple-700/30" />
           </div>
@@ -566,9 +590,10 @@ function EQInspector({ eq, perspective }: { eq: Equalizer; perspective: Perspect
         <div className="text-xs text-zinc-500">{eq.vendor} · {eq.topology} · {eq.channels}ch</div>
       </div>
 
+      <OverviewSection component={eq} perspective={perspective} />
+
       {perspective === 'musician' && (
         <Section title="Character">
-          <p className="text-sm text-zinc-300 leading-relaxed">{eq.character}</p>
           <div className="mt-2">
             <DescriptiveList title="Likely tendencies" items={eq.tendencies} tone="bg-teal-900/20 text-teal-300 border-teal-700/30" />
           </div>
@@ -613,12 +638,6 @@ function EQInspector({ eq, perspective }: { eq: Equalizer; perspective: Perspect
           </Section>
         </>
       )}
-
-      {eq.heritage && (
-        <Section title="Heritage">
-          <p className="text-xs text-zinc-400 italic">{eq.heritage}</p>
-        </Section>
-      )}
     </div>
   );
 }
@@ -631,9 +650,10 @@ function OutboardInspector({ proc, perspective }: { proc: OutboardProcessor; per
         <div className="text-xs text-zinc-500">{proc.vendor} · {proc.type} · {proc.format} · {proc.channels}ch</div>
       </div>
 
+      <OverviewSection component={proc} perspective={perspective} />
+
       {perspective === 'musician' && (
         <Section title="Character">
-          <p className="text-sm text-zinc-300 leading-relaxed">{proc.character}</p>
           <div className="mt-2">
             <DescriptiveList title="Likely tendencies" items={proc.tendencies} tone="bg-rose-900/20 text-rose-300 border-rose-700/30" />
           </div>
@@ -679,12 +699,6 @@ function OutboardInspector({ proc, perspective }: { proc: OutboardProcessor; per
             <p className="text-xs text-zinc-400 leading-relaxed">{proc.engineering}</p>
           </Section>
         </>
-      )}
-
-      {proc.heritage && (
-        <Section title="Heritage">
-          <p className="text-xs text-zinc-400 italic">{proc.heritage}</p>
-        </Section>
       )}
     </div>
   );

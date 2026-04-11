@@ -114,7 +114,7 @@ export const patchRows: PatchRow[] = [
 
   // ── OUTBOARD POOL (not signal path — available gear for insert patching) ──
   { id: 'row-dynamics', label: 'Dynamics Rack', order: 7, category: 'outboard-pool', description: 'The Channel rack — all compressors, limiters, gates. Patch between insert sends and returns.' },
-  { id: 'row-eq', label: 'EQ Rack', order: 8, category: 'outboard-pool', description: 'All equalizers. Patch between insert sends and returns. Langevin MMP, Retro 2A3, Iron Age V2, Chandler Tone Control ×2, Tonelux Equalux, Tilt EQ ×2.' },
+  { id: 'row-eq', label: 'Outboard', order: 8, category: 'outboard-pool', description: 'All equalizers. Patch between insert sends and returns. Langevin MMP, Retro 2A3, Iron Age V2, Chandler Tone Control ×2, Tonelux Equalux, Tilt EQ ×2.' },
   { id: 'row-spatial', label: 'Spatial / Harmonic Outboard', order: 9, category: 'outboard-pool', description: 'Patch-in inline processors such as stereo wideners and low-end harmonic enhancers. No static normal destination; use only where needed on stereo tracks, groups, or full mixes.' },
   { id: 'row-fx', label: 'Time-Based FX Returns', order: 10, category: 'outboard-pool', description: 'Reverbs and multi-FX generally run as parallel wet processors. Parallel feeds are broader than FX, but this row focuses on send-fed ambience returns through Tonelux OTB → API Mix B return.' },
 

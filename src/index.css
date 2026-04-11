@@ -14,6 +14,7 @@ body {
     radial-gradient(circle at bottom right, rgba(34, 211, 238, 0.08), transparent 30%),
     #09090b;
   color: #e4e4e7;
+  transition: background 0.45s ease, color 0.45s ease;
 }
 
 #root {

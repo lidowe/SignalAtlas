@@ -167,7 +167,7 @@ export const outboardProcessors: OutboardProcessor[] = [
     id: 'fx-furman-punch10',
     name: 'Furman Punch 10',
     vendor: 'Furman',
-    channels: 2,
+    channels: 4,
     type: 'harmonic',
     routing_mode: 'inline-optional',
     format: 'analog',

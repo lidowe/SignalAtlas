@@ -4,6 +4,24 @@ import PatchbayView from './components/PatchbayView';
 import ComponentInspector from './components/ComponentInspector';
 import AnalysisPanel from './components/AnalysisPanel';
 
+const shellTheme = {
+  musician: {
+    frame: 'bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.1),transparent_34%),#09090b]',
+    glowA: 'bg-emerald-500/10',
+    glowB: 'bg-lime-400/8',
+  },
+  engineer: {
+    frame: 'bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,115,22,0.1),transparent_34%),#09090b]',
+    glowA: 'bg-red-500/10',
+    glowB: 'bg-orange-400/8',
+  },
+  technical: {
+    frame: 'bg-[radial-gradient(circle_at_top_left,rgba(234,179,8,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.1),transparent_34%),#09090b]',
+    glowA: 'bg-yellow-400/10',
+    glowB: 'bg-amber-400/8',
+  },
+} as const;
+
 function App() {
   const {
     state,
@@ -21,8 +39,10 @@ function App() {
     outboardProcessors,
   } = useStudio();
 
+  const theme = shellTheme[state.perspective];
+
   return (
-    <div className="h-screen h-[100svh] flex flex-col bg-zinc-950 text-zinc-200 overflow-hidden">
+    <div className={`h-screen h-[100svh] flex flex-col text-zinc-200 overflow-hidden transition-colors duration-500 ${theme.frame}`}>
       <Header
         perspective={state.perspective}
         onPerspective={setPerspective}
@@ -30,8 +50,8 @@ function App() {
 
       <div className="relative flex flex-1 overflow-hidden">
         <div className="pointer-events-none absolute inset-0 opacity-60">
-          <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-amber-500/8 blur-3xl" />
-          <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-cyan-500/8 blur-3xl" />
+          <div className={`absolute left-0 top-0 h-72 w-72 rounded-full blur-3xl transition-colors duration-500 ${theme.glowA}`} />
+          <div className={`absolute bottom-0 right-0 h-80 w-80 rounded-full blur-3xl transition-colors duration-500 ${theme.glowB}`} />
         </div>
         {/* Main content area */}
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden">

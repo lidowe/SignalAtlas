@@ -205,6 +205,33 @@ function parallelNarrative(perspective: Perspective, parallelChain: ParallelProc
   return parallelChain.map((proc) => `Parallel branch: ${proc.item.name} taps ${proc.routing.send_source_label} and resolves at ${proc.routing.return_destination_label}. It does not alter the primary mic → preamp → insert electrical path; it creates a secondary line-level branch that is summed alongside it.`);
 }
 
+function directionalOverview(
+  selectedMic: Microphone | null,
+  selectedPreamp: Preamp | null,
+  insertChain: InsertProcessor[],
+  parallelChain: ParallelProcessor[]
+): string | null {
+  const parts: string[] = [];
+
+  if (selectedMic) {
+    parts.push(selectedMic.name);
+  }
+
+  if (selectedPreamp) {
+    parts.push(selectedPreamp.name);
+  }
+
+  if (insertChain.length > 0) {
+    parts.push(...insertChain.map((processor) => processor.item.name));
+  }
+
+  if (parallelChain.length > 0) {
+    parts.push(`${parallelChain.length} parallel ${parallelChain.length === 1 ? 'branch' : 'branches'}`);
+  }
+
+  return parts.length > 0 ? parts.join(' → ') : null;
+}
+
 export default function AnalysisPanel({
   perspective, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
 }: Props) {
@@ -214,30 +241,22 @@ export default function AnalysisPanel({
     routeSummary.deviations.length > 0 ||
     routeSummary.validation_issues.length > 0 ||
     routeSummary.available_next_actions.length > 0;
+  const overview = directionalOverview(selectedMic, selectedPreamp, insertChain, parallelChain);
 
   if (!analysis || !selectedMic || !selectedPreamp) {
+    if (!overview) {
+      return null;
+    }
+
     return (
-      <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-3 space-y-2 backdrop-blur">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Route status</span>
-            <span className="text-[10px] rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-zinc-400">{routeSummary.status}</span>
+      <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-2 backdrop-blur">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Signal overview</div>
+            <div className="mt-1 truncate text-[11px] text-zinc-300">{overview}</div>
           </div>
-          <p className="mt-2 text-sm text-zinc-300">{routeSummary.headline}</p>
-          {routeSummary.available_next_actions.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {routeSummary.available_next_actions.slice(0, 2).map((action) => (
-                <span key={action} className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400">{action}</span>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500 leading-relaxed">
-            {selectedMic ? `${selectedMic.name} is in circuit. Pair it with a preamp and the route will begin to declare its character, gain structure, and constraints.` : 'Begin anywhere that makes sense to you. Once a selection establishes a meaningful path, the route readout and analysis will answer to it.'}
-          </span>
           {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
-            <button onClick={onClearChain} className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-full px-2.5 py-1">
+            <button onClick={onClearChain} className="shrink-0 rounded-full border border-zinc-800 px-2.5 py-1 text-[10px] text-zinc-500 hover:text-zinc-300">
               Clear
             </button>
           )}
@@ -297,7 +316,7 @@ export default function AnalysisPanel({
       <div className="grid gap-3 xl:grid-cols-2">
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Route status</span>
+            <span className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Signal overview</span>
             <span className="text-[10px] rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-zinc-400">{routeSummary.status}</span>
           </div>
           <p className="text-sm text-zinc-200">{routeSummary.headline}</p>
