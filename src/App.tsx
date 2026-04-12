@@ -1,10 +1,12 @@
+import { Suspense, lazy } from 'react';
 import { useStudio } from './hooks/useStudio';
 import { useDemoWalkthrough } from './hooks/useDemoWalkthrough';
 import Header from './components/Header';
 import PatchbayView from './components/PatchbayView';
-import ComponentInspector from './components/ComponentInspector';
 import AnalysisPanel from './components/AnalysisPanel';
 import SonicSignatureStrip from './components/SonicSignatureStrip';
+
+const ComponentInspector = lazy(() => import('./components/ComponentInspector'));
 
 const shellTheme = {
   musician: {
@@ -129,12 +131,14 @@ function App() {
             />
 
             <aside className="fixed inset-x-0 bottom-0 top-20 z-30 overflow-y-auto rounded-t-2xl border border-zinc-800 bg-zinc-950/96 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:bg-zinc-950/72 lg:shadow-none lg:backdrop-blur shrink-0">
-              <ComponentInspector
-                perspective={state.perspective}
-                inspectedId={state.inspectedId}
-                onInspect={inspect}
-                onClose={() => inspect(null)}
-              />
+              <Suspense fallback={<div className="p-4 text-sm text-zinc-500">Loading inspector…</div>}>
+                <ComponentInspector
+                  perspective={state.perspective}
+                  inspectedId={state.inspectedId}
+                  onInspect={inspect}
+                  onClose={() => inspect(null)}
+                />
+              </Suspense>
             </aside>
           </>
         )}

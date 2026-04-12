@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import type {
   ChainAnalysis,
@@ -16,8 +16,9 @@ import { patchRows } from '../data/studio';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
-import CascadeView from './CascadeView';
 import SignalFlowOverlay from './SignalFlowOverlay';
+
+const CascadeView = lazy(() => import('./CascadeView'));
 
 interface Props {
   perspective: Perspective;
@@ -571,6 +572,12 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
+    const [showCascadeView, setShowCascadeView] = useState(false);
+
+    useEffect(() => {
+      const frame = window.requestAnimationFrame(() => setShowCascadeView(true));
+      return () => window.cancelAnimationFrame(frame);
+    }, []);
 
   const utilityMicTypes: Set<Microphone['type']> = new Set(['Measurement', 'Subkick', 'Field Recorder']);
   const orderedMicTypes: Microphone['type'][] = ['Tube LDC', 'FET LDC', 'FET MDC', 'FET SDC', 'Ribbon', 'Dynamic', 'Boundary'];
@@ -1384,7 +1391,13 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         })}
       </div>
 
-      <CascadeView mode={mode} perspective={perspective} />
+      {showCascadeView ? (
+        <Suspense fallback={<div className="mt-4 rounded-[1.7rem] border border-zinc-800 bg-zinc-950/40 px-4 py-6 text-sm text-zinc-500">Loading console and monitor path…</div>}>
+          <CascadeView mode={mode} perspective={perspective} />
+        </Suspense>
+      ) : (
+        <div className="mt-4 rounded-[1.7rem] border border-zinc-800 bg-zinc-950/40 px-4 py-6 text-sm text-zinc-500">Loading console and monitor path…</div>
+      )}
     </div>
   );
 }
