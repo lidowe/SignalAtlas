@@ -24,6 +24,9 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      - run: mkdir -p dist/.github/workflows
+      - run: cp .github/workflows/pages-runtime.yml dist/.github/workflows/pages-runtime.yml
+      - run: touch dist/.nojekyll
 
       - uses: peaceiris/actions-gh-pages@v4
         with:
@@ -31,3 +34,4 @@ jobs:
           publish_branch: gh-pages
           publish_dir: ./dist
           force_orphan: false
+
