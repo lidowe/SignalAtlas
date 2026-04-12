@@ -246,7 +246,7 @@ function SpeakerDetail({ speaker, perspective, onClose }: { speaker: MonitorSpea
         <button type="button" onClick={onClose} className="text-[10px] text-zinc-600 hover:text-zinc-300 shrink-0 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">Close</button>
       </div>
       <p className="text-[11.5px] leading-relaxed text-zinc-300">
-        {perspective === 'tech' ? speaker.engineering : speaker.character}
+          {perspective === 'technical' ? speaker.engineering : speaker.character}
       </p>
       <div className="flex gap-4 text-[10px] text-zinc-500">
         <span>{speaker.freq_range_hz[0]} Hz – {speaker.freq_range_hz[1] >= 1000 ? `${speaker.freq_range_hz[1] / 1000}k` : speaker.freq_range_hz[1]} Hz</span>

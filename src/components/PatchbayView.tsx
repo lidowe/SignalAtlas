@@ -568,7 +568,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   );
 }
 
-export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
+  export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
 
