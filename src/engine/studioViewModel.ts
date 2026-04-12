@@ -102,111 +102,81 @@ export function buildRouteSummary(
   inserts: InsertProcessor[],
   parallelProcessors: ParallelProcessor[],
   analysis: ChainAnalysis | null,
-  validationIssues: RouteValidationIssue[] = []
+  _validationIssues: RouteValidationIssue[] = []
 ): RouteSummaryModel {
   const active_path = buildActivePath(mic, preamp, inserts);
   const parallel_paths = buildParallelPaths(parallelProcessors);
-  const primaryValidationIssue = validationIssues.find((issue) => issue.severity === 'blocked')
-    ?? validationIssues.find((issue) => issue.severity === 'warning');
+  const gain_margin_summary = buildGainMarginSummary(mic, preamp);
 
+  // ── Default continuation after the user's selections ──
+  const defaultContinuation = 'API Mix A bus → AD+ converter → DAW';
+
+  // ── Nothing selected ──
   if (!mic && !preamp) {
     return {
       status: 'incomplete',
-      headline: 'No route selected yet',
-      viability_flag: {
-        level: 'blocked',
-        reason: 'A source and destination need to be chosen before the route can be evaluated.',
-      },
-      validation_issues: validationIssues,
+      headline: 'No source selected',
+      viability_flag: { level: 'ok', reason: `Default path: mic tie → preamp → ${defaultContinuation}.` },
+      validation_issues: [],
       active_path,
       parallel_paths,
       deviations: [],
-      available_next_actions: ['Choose a microphone', 'Open the default studio flow'],
+      available_next_actions: ['Choose a microphone'],
     };
   }
 
+  // ── Mic only ──
   if (mic && !preamp) {
     return {
       status: 'incomplete',
-      headline: `${mic.name} selected — route is waiting for a preamp`,
-      viability_flag: {
-        level: 'blocked',
-        reason: 'The microphone is chosen, but there is no gain stage to bring it into the working line-level path.',
-      },
+      headline: `${mic.name} → preamp → ${defaultContinuation}`,
+      viability_flag: { level: 'ok', reason: `${mic.name} is selected. Next stage is a preamp to bring the signal to line level, then the default path continues to the converter.` },
       gain_margin_summary: undefined,
-      validation_issues: validationIssues,
+      validation_issues: [],
       active_path,
       parallel_paths,
       deviations: [],
-      available_next_actions: ['Choose a preamp', 'Inspect impedance and gain demand'],
+      available_next_actions: ['Choose a preamp'],
     };
   }
 
+  // ── Build path description ──
+  const micLabel = mic?.name ?? 'source';
+  const preLabel = preamp?.name ?? 'preamp';
   const deviations: string[] = [];
-  const gain_margin_summary = buildGainMarginSummary(mic, preamp);
+
   if (inserts.length > 0) {
-    deviations.push(`Default path is extended by ${inserts.length} insert stage${inserts.length === 1 ? '' : 's'}`);
+    deviations.push(`${inserts.length} insert stage${inserts.length === 1 ? '' : 's'} before the mix bus`);
   }
   if (parallelProcessors.length > 0) {
-    deviations.push(`${parallelProcessors.length} parallel path${parallelProcessors.length === 1 ? '' : 's'} supplement the direct chain without replacing it`);
-    parallelProcessors.forEach((processor) => {
-      deviations.push(`${processor.item.name} taps from ${processor.routing.send_source_label} and returns via ${processor.routing.return_destination_label}`);
-    });
+    deviations.push(`${parallelProcessors.length} parallel ${parallelProcessors.length === 1 ? 'path supplements' : 'paths supplement'} the direct chain`);
   }
 
-  if (primaryValidationIssue?.severity === 'blocked') {
-    return {
-      status: 'warning',
-      headline: 'Route is blocked until the routing issue is resolved',
-      viability_flag: {
-        level: 'blocked',
-        reason: primaryValidationIssue.message,
-      },
-      gain_margin_summary,
-      validation_issues: validationIssues,
-      active_path,
-      parallel_paths,
-      deviations,
-      available_next_actions: [primaryValidationIssue.suggested_action ?? 'Review the patch path', 'Return to the default route'],
-    };
-  }
+  const insertArrow = inserts.length > 0
+    ? ` → ${inserts.map(i => i.item.name).join(' → ')}`
+    : '';
 
-  if (primaryValidationIssue?.severity === 'warning' || analysis?.warnings.length) {
-    return {
-      status: 'warning',
-      headline: 'Route is active with cautions worth reviewing',
-      viability_flag: {
-        level: 'caution',
-        reason: primaryValidationIssue?.message ?? analysis?.warnings[0] ?? 'Review the active route for avoidable tradeoffs.',
-      },
-      gain_margin_summary,
-      validation_issues: validationIssues,
-      active_path,
-      parallel_paths,
-      deviations,
-      available_next_actions: [
-        primaryValidationIssue?.suggested_action ?? 'Review warnings',
-        'Try alternate preamp loading',
-        'Reduce insert complexity',
-      ],
-    };
-  }
+  const headline = `${micLabel} → ${preLabel}${insertArrow} → ${defaultContinuation}`;
+
+  const stageCount = 2 + inserts.length; // mic + preamp + inserts
+  const reason = inserts.length > 0
+    ? `${stageCount} analog stages before conversion. Insert chain extends the default normalled path.`
+    : `Clean normalled path — ${micLabel} feeds ${preLabel}, then straight through to conversion.`;
+
+  // Surface warnings as notes but never as blockers
+  const level: 'ok' | 'caution' = (analysis?.warnings?.length ?? 0) > 0 ? 'caution' : 'ok';
+  const cautionReason = analysis?.warnings?.[0];
 
   return {
     status: inserts.length > 0 ? 'custom' : 'default',
-    headline: inserts.length > 0 ? 'Custom analog route is active' : 'Default tracking route is active',
-    viability_flag: {
-      level: 'ok',
-      reason: inserts.length > 0
-        ? 'The route is complete and operating within expected constraints.'
-        : 'The default tracking path is complete and electrically straightforward.',
-    },
+    headline,
+    viability_flag: { level, reason: cautionReason ?? reason },
     gain_margin_summary,
-    validation_issues: validationIssues,
+    validation_issues: [],
     active_path,
     parallel_paths,
     deviations,
-    available_next_actions: ['Compare another preamp', 'Add or reorder inserts', 'Inspect the room path'],
+    available_next_actions: [],
   };
 }
 
@@ -228,7 +198,7 @@ export function buildPerspectiveInsights(
       perspective,
       summary: analysis.warnings.length > 0
         ? 'This route has a noticeable personality shift or constraint that may become part of the sound.'
-        : 'This route is electrically straightforward, so most of the audible character comes from the chosen gear itself.',
+        : `The gear is doing most of the talking here — ${analysis.bridging_ratio >= 10 ? 'the electrical interface is transparent, so' : 'the impedance interaction adds subtle color, and'} what you hear is the character of the mic and preamp themselves.`,
       warnings: analysis.warnings,
       notes: analysis.notes,
     };
@@ -239,7 +209,7 @@ export function buildPerspectiveInsights(
       perspective,
       summary: analysis.warnings.length > 0
         ? 'The route works, but there are practical engineering constraints to manage.'
-        : 'The route is practical and within normal professional operating expectations.',
+        : `Bridging ratio ${analysis.bridging_ratio.toFixed(1)}:1, ${analysis.effective_bw_khz.toFixed(0)}kHz bandwidth, ${analysis.cumulative_noise_db.toFixed(0)} dBu cascaded noise. ${analysis.bridging_ratio >= 10 ? 'Clean interface.' : 'Some impedance loading — worth monitoring.'}`,
       warnings: analysis.warnings,
       notes: analysis.notes,
     };

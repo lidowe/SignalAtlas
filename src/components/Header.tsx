@@ -1,8 +1,15 @@
-import type { Perspective } from '../types/studio';
+import type { Perspective, StudioMode } from '../types/studio';
+import type { DemoState } from '../hooks/useDemoWalkthrough';
 
 interface Props {
   perspective: Perspective;
+  mode: StudioMode;
   onPerspective: (p: Perspective) => void;
+  onMode: (m: StudioMode) => void;
+  demoState: DemoState;
+  demoNarration: string;
+  onStartDemo: () => void;
+  onCancelDemo: () => void;
 }
 
 const perspectives: { key: Perspective; label: string }[] = [
@@ -29,7 +36,7 @@ const headerTheme: Record<Perspective, { bar: string; active: string; chip: stri
   },
 };
 
-export default function Header({ perspective, onPerspective }: Props) {
+export default function Header({ perspective, mode, onPerspective, onMode, demoState, demoNarration, onStartDemo, onCancelDemo }: Props) {
   const theme = headerTheme[perspective];
 
   return (
@@ -44,6 +51,23 @@ export default function Header({ perspective, onPerspective }: Props) {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className={`flex items-center gap-2 rounded-full border px-2 py-1 transition-colors duration-500 ${theme.bar}`}>
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500">Mode</span>
+            {(['tracking', 'mixing'] as StudioMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => onMode(m)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  mode === m
+                    ? 'border border-zinc-400/30 bg-zinc-400/14 text-zinc-100'
+                    : 'border border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+
           <div className={`flex items-center gap-2 rounded-full border px-2 py-1 transition-colors duration-500 ${theme.bar}`}>
             <span className="text-[10px] uppercase tracking-wide text-zinc-500">Perspective</span>
             {perspectives.map(p => (
@@ -61,8 +85,32 @@ export default function Header({ perspective, onPerspective }: Props) {
             ))}
           </div>
           <div className={`text-[10px] uppercase tracking-[0.18em] ${theme.chip}`}>{perspective} lens</div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={demoState === 'running' ? onCancelDemo : onStartDemo}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                demoState === 'running'
+                  ? 'border-amber-500/40 bg-amber-500/14 text-amber-200 animate-pulse'
+                  : 'border-zinc-600/40 bg-zinc-800/40 text-zinc-400 hover:border-zinc-500/50 hover:text-zinc-200'
+              }`}
+            >
+              {demoState === 'running'
+                ? 'Stop Demo'
+                : mode === 'mixing'
+                  ? 'Mixing Demo'
+                  : 'Tracking Demo'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {demoState === 'running' && demoNarration && (
+        <div className="mt-3 rounded-lg border border-amber-800/30 bg-amber-950/20 px-3 py-2">
+          <p className="text-xs leading-relaxed text-amber-200/90 animate-fade-in">{demoNarration}</p>
+        </div>
+      )}
     </header>
   );
 }

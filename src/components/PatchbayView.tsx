@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import type {
   ChainAnalysis,
@@ -10,15 +10,18 @@ import type {
   ParallelProcessorInput,
   Perspective,
   Preamp,
+  StudioMode,
 } from '../types/studio';
 import { patchRows } from '../data/studio';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
-import RouteReadout from './RouteReadout';
+import CascadeView from './CascadeView';
+import SignalFlowOverlay from './SignalFlowOverlay';
 
 interface Props {
   perspective: Perspective;
+  mode: StudioMode;
   selectedMic: Microphone | null;
   selectedPreamp: Preamp | null;
   insertChain: InsertProcessor[];
@@ -36,7 +39,7 @@ interface Props {
   outboardProcessors: OutboardProcessor[];
 }
 
-type BayTone = 'rose' | 'red' | 'orange' | 'amber' | 'yellow' | 'lime' | 'teal' | 'cyan' | 'sky' | 'blue' | 'violet' | 'purple' | 'slate';
+type BayTone = 'rose' | 'red' | 'orange' | 'amber' | 'yellow' | 'lime' | 'green' | 'teal' | 'cyan' | 'sky' | 'blue' | 'violet' | 'purple' | 'slate';
 
 interface BaySegment {
   id: string;
@@ -73,6 +76,7 @@ const bayToneClasses: Record<BayTone, { strip: string; socket: string; selected:
   amber: { strip: 'bg-amber-300/18 text-amber-100', socket: 'border-amber-400/45 text-amber-200', selected: 'border-amber-300 bg-amber-300 text-zinc-950', ring: 'ring-amber-300/30' },
   yellow: { strip: 'bg-yellow-300/18 text-yellow-100', socket: 'border-yellow-400/45 text-yellow-200', selected: 'border-yellow-300 bg-yellow-300 text-zinc-950', ring: 'ring-yellow-300/30' },
   lime: { strip: 'bg-lime-300/18 text-lime-100', socket: 'border-lime-400/45 text-lime-200', selected: 'border-lime-300 bg-lime-300 text-zinc-950', ring: 'ring-lime-300/30' },
+  green: { strip: 'bg-green-300/18 text-green-100', socket: 'border-green-400/45 text-green-200', selected: 'border-green-300 bg-green-300 text-zinc-950', ring: 'ring-green-300/30' },
   teal: { strip: 'bg-teal-300/18 text-teal-100', socket: 'border-teal-400/45 text-teal-200', selected: 'border-teal-300 bg-teal-300 text-zinc-950', ring: 'ring-teal-300/30' },
   cyan: { strip: 'bg-cyan-300/18 text-cyan-100', socket: 'border-cyan-400/45 text-cyan-200', selected: 'border-cyan-300 bg-cyan-300 text-zinc-950', ring: 'ring-cyan-300/30' },
   sky: { strip: 'bg-sky-300/18 text-sky-100', socket: 'border-sky-400/45 text-sky-200', selected: 'border-sky-300 bg-sky-300 text-zinc-950', ring: 'ring-sky-300/30' },
@@ -96,6 +100,13 @@ const rowShellTone: Record<string, string> = {
   'row-api-mix': 'border-amber-900/60 bg-[linear-gradient(180deg,rgba(39,27,8,0.95),rgba(15,16,18,0.96))]',
   'row-pueblo': 'border-yellow-900/60 bg-[linear-gradient(180deg,rgba(39,33,6,0.95),rgba(15,16,18,0.96))]',
   'row-ad-daw': 'border-blue-900/60 bg-[linear-gradient(180deg,rgba(10,18,35,0.95),rgba(15,16,18,0.96))]',
+};
+
+const micLabelExpanded: Partial<Record<Microphone['type'], string>> = {
+  'Tube LDC': 'Tube Large C',
+  'FET LDC': 'FET Large C',
+  'FET MDC': 'FET Med C',
+  'FET SDC': 'FET Small C',
 };
 
 const micTypeTone: Record<Microphone['type'], BayTone> = {
@@ -253,7 +264,7 @@ function rowActive(rowId: string, selectedMic: Microphone | null, selectedPreamp
 
 function RowShell({ rowId, order, label, active, isNext, children }: { rowId: string; order: number | string; label: string; active: boolean; isNext: boolean; children: ReactNode }) {
   return (
-    <section className={`rounded-[1.6rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${isNext ? 'ring-1 ring-inset ring-zinc-100/18' : ''}`}>
+    <section data-row-id={rowId} className={`rounded-[1.6rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${isNext ? 'ring-1 ring-inset ring-zinc-100/18' : ''}`}>
       <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-zinc-500">
@@ -305,20 +316,26 @@ function toPairedSegments(segments: BaySegment[]): PairedBaySegment[] {
 }
 
 function StackedBayFace({
+  rowId,
   topSegments,
   bottomSegments,
   selectedTopPoints = [],
   selectedBottomPoints = [],
   openTopSegmentId,
   onTopSegmentClick,
+  openBottomSegmentId,
+  onBottomSegmentClick,
   segmentButtonProps,
 }: {
+  rowId: string;
   topSegments: PairedBaySegment[];
   bottomSegments: PairedBaySegment[];
   selectedTopPoints?: number[];
   selectedBottomPoints?: number[];
   openTopSegmentId?: string | null;
   onTopSegmentClick?: (segmentId: string) => void;
+  openBottomSegmentId?: string | null;
+  onBottomSegmentClick?: (segmentId: string) => void;
   segmentButtonProps?: SegmentButtonProps;
 }) {
   const topEntries = expandBaySegments(topSegments);
@@ -363,7 +380,7 @@ function StackedBayFace({
     );
   };
 
-  const renderSocketRow = (entries: ExpandedBayPoint[], selectedSet: Set<number>) => (
+  const renderSocketRow = (entries: ExpandedBayPoint[], selectedSet: Set<number>, position: 'top' | 'bottom') => (
     <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
       {Array.from({ length: totalColumns }, (_, index) => {
         const entry = entries[index] ?? null;
@@ -371,7 +388,10 @@ function StackedBayFace({
 
         return (
           <div key={`${entry?.segmentId ?? 'open'}-${index}`} className="flex justify-center">
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${entry ? (selected ? bayToneClasses[entry.tone].selected : `bg-zinc-950/95 ${bayToneClasses[entry.tone].socket}`) : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}>
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${entry ? (selected ? bayToneClasses[entry.tone].selected : `bg-zinc-950/95 ${bayToneClasses[entry.tone].socket}`) : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}
+              {...(selected && entry?.number != null ? { 'data-selected-point': `${rowId}-${position}-${entry.number}` } : {})}
+            >
               {entry?.number ?? ''}
             </span>
           </div>
@@ -385,9 +405,9 @@ function StackedBayFace({
       <div className="overflow-x-auto pb-1">
         <div className="min-w-max space-y-2">
           {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
-          {renderSocketRow(topEntries, selectedTop)}
-          {renderSocketRow(bottomEntries, selectedBottom)}
-          {renderStrip(bottomSegments, openTopSegmentId, onTopSegmentClick)}
+          {renderSocketRow(topEntries, selectedTop, 'top')}
+          {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+          {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
         </div>
       </div>
     </div>
@@ -548,11 +568,20 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   );
 }
 
-export default function PatchbayView({ perspective, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
+export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
 
-  const orderedMicTypes: Microphone['type'][] = ['Tube LDC', 'FET LDC', 'FET MDC', 'FET SDC', 'Ribbon', 'Dynamic', 'Boundary', 'Measurement', 'Subkick', 'Field Recorder'];
-  const micGroups = orderedMicTypes.map((type) => ({ type, mics: microphones.filter((mic) => mic.type === type) })).filter((entry) => entry.mics.length > 0);
+  const utilityMicTypes: Set<Microphone['type']> = new Set(['Measurement', 'Subkick', 'Field Recorder']);
+  const orderedMicTypes: Microphone['type'][] = ['Tube LDC', 'FET LDC', 'FET MDC', 'FET SDC', 'Ribbon', 'Dynamic', 'Boundary'];
+  const micGroupsRaw: Array<{ label: string; mics: Microphone[]; tone: BayTone }> = orderedMicTypes
+    .map((type) => ({ label: micLabelExpanded[type] ?? type, mics: microphones.filter((mic) => mic.type === type), tone: micTypeTone[type] }))
+    .filter((entry) => entry.mics.length > 0);
+  const utilityMics = microphones.filter((mic) => utilityMicTypes.has(mic.type));
+  if (utilityMics.length > 0) {
+    micGroupsRaw.push({ label: 'Utility', mics: utilityMics, tone: 'cyan' });
+  }
+  const micGroups = micGroupsRaw.sort((a, b) => a.mics.length - b.mics.length);
   const standardPreamps = preamps.filter((preamp) => !hasStandaloneEqSection(preamp));
   const preampEqUnits = preamps.filter(hasStandaloneEqSection);
   const orderedPreamps = [...standardPreamps, ...preampEqUnits];
@@ -562,16 +591,26 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
   const parallelFx = outboardProcessors.filter((processor) => processor.routing_mode === 'parallel-send-return');
   const inlineGroups = groupByLabel(inlineOutboard, (processor) => processor.type.replace(/-/g, ' '));
   const fxGroups = groupByLabel(parallelFx, (processor) => processor.type.replace(/-/g, ' '));
-  const selectedPreampPoint = selectedPreamp ? orderedPreamps.findIndex((preamp) => preamp.id === selectedPreamp.id) + 1 : 0;
+  const preampPointNumber = (preampId: string) => {
+    let cursor = 1;
+    for (const p of orderedPreamps) {
+      if (p.id === preampId) return cursor;
+      cursor += p.channels;
+    }
+    return 1;
+  };
+  const selectedPreampPoints = selectedPreamp
+    ? Array.from({ length: selectedPreamp.channels }, (_, i) => preampPointNumber(selectedPreamp.id) + i)
+    : [];
   const insertIds = new Set(insertChain.map((processor) => processor.item.id));
   const parallelIds = new Set(parallelChain.map((processor) => processor.item.id));
   const insertPreampEqIds = new Set(insertChain.filter((processor) => processor.type === 'preamp-eq').map((processor) => processor.item.id));
 
-  const micStartPoint = (type: Microphone['type']) => {
+  const micStartPoint = (label: string) => {
     let cursor = 1;
 
     for (const entry of micGroups) {
-      if (entry.type === type) return cursor;
+      if (entry.label === label) return cursor;
       cursor += entry.mics.length;
     }
 
@@ -630,15 +669,26 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
 
   const guide = nextStep(selectedMic, selectedPreamp, insertChain);
   const guideTheme = perspectiveTheme[perspective];
-  const micSegments: BaySegment[] = micGroups.map((entry) => ({ id: entry.type.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label: entry.type, count: entry.mics.length, tone: micTypeTone[entry.type] }));
+  const micSegments: BaySegment[] = (() => {
+    const nonDynamic = micGroups.filter((g) => g.label !== 'Dynamic');
+    const dynamicGroup = micGroups.find((g) => g.label === 'Dynamic');
+    const nonDynamicTotal = nonDynamic.reduce((s, g) => s + g.mics.length, 0);
+    const segments: BaySegment[] = nonDynamic.map((entry) => ({ id: entry.label.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label: entry.label, count: entry.mics.length, tone: entry.tone }));
+    if (dynamicGroup) {
+      segments.push({ id: 'dynamic', label: 'Dynamic', count: BAY_ROW_LENGTH - nonDynamicTotal, tone: dynamicGroup.tone });
+    }
+    return segments;
+  })();
+  const standardPreampChannels = standardPreamps.reduce((s, p) => s + p.channels, 0);
+  const preampEqChannels = preampEqUnits.reduce((s, p) => s + p.channels, 0);
   const preampSegments: BaySegment[] = [];
 
   if (standardPreamps.length > 0) {
-    preampSegments.push({ id: 'direct-preamp', label: `${standardPreamps.length} preamps`, count: standardPreamps.length, tone: 'blue' });
+    preampSegments.push({ id: 'direct-preamp', label: `${standardPreamps.length} preamps`, count: standardPreampChannels, tone: 'blue' });
   }
 
   if (preampEqUnits.length > 0) {
-    preampSegments.push({ id: 'preamp-eq', label: `${preampEqUnits.length} preamp / eq`, count: preampEqUnits.length, tone: 'cyan' });
+    preampSegments.push({ id: 'preamp-eq', label: `${preampEqUnits.length} preamp / eq`, count: preampEqChannels, tone: 'cyan' });
   }
 
   const compressorSegments: BaySegment[] = compressorGroups.map((group) => ({ id: group.id, label: abbreviateTopology(group.label), count: group.items.reduce((s, c) => s + c.channels, 0), tone: 'purple' }));
@@ -673,65 +723,134 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
   ];
   const dawOutputBottomSegments: PairedBaySegment[] = [
     { id: 'api-line-inputs', label: 'API Line Inputs', count: 16, tone: 'lime', startNumber: 1 },
-    { id: 'pueblo-line-inputs', label: 'Pueblo Line Inputs', count: 32, tone: 'yellow', startNumber: 1 },
+    { id: 'otb-stem-inputs', label: 'OTB Stem Inputs', count: 8, tone: 'amber', startNumber: 17 },
+  ];
+
+  const dawInputSegments: PairedBaySegment[] = [
+    { id: 'lynx-line-inputs', label: 'Lynx Line Inputs', count: 24, tone: 'green', startNumber: 1 },
   ];
   const preampInputSegments: PairedBaySegment[] = [];
 
   if (standardPreamps.length > 0) {
-    preampInputSegments.push({ id: 'direct-preamp-inputs', label: 'Preamp Inputs', count: standardPreamps.length, tone: 'blue', startNumber: 1 });
+    preampInputSegments.push({ id: 'direct-preamp-inputs', label: 'Preamp Inputs', count: standardPreampChannels, tone: 'blue', startNumber: 1 });
   }
 
   if (preampEqUnits.length > 0) {
-    preampInputSegments.push({ id: 'preamp-eq-inputs', label: 'Preamp / EQ Inputs', count: preampEqUnits.length, tone: 'cyan', startNumber: standardPreamps.length + 1 });
+    preampInputSegments.push({ id: 'preamp-eq-inputs', label: 'Preamp / EQ Inputs', count: preampEqChannels, tone: 'cyan', startNumber: standardPreampChannels + 1 });
   }
+
+  preampInputSegments.push({ id: 'otb16-line-inputs', label: 'OTB16 Line Inputs', count: 4, tone: 'amber', startNumber: standardPreampChannels + preampEqChannels + 1 });
 
   const preampOutputSegments: PairedBaySegment[] = [];
 
   if (standardPreamps.length > 0) {
-    preampOutputSegments.push({ id: 'direct-preamp-outputs', label: 'Preamp Outputs', count: standardPreamps.length, tone: 'orange', startNumber: 1 });
+    preampOutputSegments.push({ id: 'direct-preamp-outputs', label: 'Preamp Outputs', count: standardPreampChannels, tone: 'orange', startNumber: 1 });
   }
 
   if (preampEqUnits.length > 0) {
-    preampOutputSegments.push({ id: 'preamp-eq-outputs', label: 'Preamp / EQ Outputs', count: preampEqUnits.length, tone: 'teal', startNumber: standardPreamps.length + 1 });
+    preampOutputSegments.push({ id: 'preamp-eq-outputs', label: 'Preamp / EQ Outputs', count: preampEqChannels, tone: 'teal', startNumber: standardPreampChannels + 1 });
   }
+
+  preampOutputSegments.push({ id: 'otb16-line-outputs', label: 'OTB16 Line Outputs', count: 4, tone: 'amber', startNumber: standardPreampChannels + preampEqChannels + 1 });
 
   const insertSendSegments: PairedBaySegment[] = [
     { id: 'api-insert-sends', label: 'API Insert Sends', count: 16, tone: 'violet', startNumber: 1 },
     { id: 'mix-a-send', label: 'A Send', count: 2, tone: 'purple', startNumber: 17 },
     { id: 'mix-b-send', label: 'B Send', count: 2, tone: 'purple', startNumber: 19 },
     { id: 'master-send', label: 'Main Send', count: 2, tone: 'purple', startNumber: 21 },
-    { id: 'otb-send', label: 'OTB Send', count: 2, tone: 'blue', startNumber: 23 },
-    { id: 'pueblo-banks', label: 'Pueblo Sum', count: 8, tone: 'yellow', startNumber: 25, subLabels: ['A', 'B', 'C', 'D'] },
-    { id: 'dbox-out', label: 'dBox Out', count: 2, tone: 'blue', startNumber: 33 },
-    { id: 'atty-out', label: 'ATTY', count: 6, tone: 'teal', startNumber: 35 },
-    { id: 'main-vu-out', label: 'Main VU', count: 2, tone: 'amber', startNumber: 41 },
+    { id: 'pueblo-banks', label: 'Pueblo Sum', count: 8, tone: 'yellow', startNumber: 23, subLabels: ['A', 'B', 'C', 'D'] },
+    { id: 'dbox-out', label: 'dBox Out', count: 2, tone: 'blue', startNumber: 31 },
+    { id: 'atty-out', label: 'ATTY', count: 6, tone: 'teal', startNumber: 33 },
+    { id: 'main-vu-out', label: 'Main VU', count: 2, tone: 'amber', startNumber: 39 },
   ];
   const insertReturnSegments: PairedBaySegment[] = [
     { id: 'api-insert-returns', label: 'API Insert Returns', count: 16, tone: 'violet', startNumber: 1 },
     { id: 'mix-a-return', label: 'A Return', count: 2, tone: 'purple', startNumber: 17 },
     { id: 'mix-b-return', label: 'B Return', count: 2, tone: 'purple', startNumber: 19 },
     { id: 'master-return', label: 'Main Return', count: 2, tone: 'purple', startNumber: 21 },
-    { id: 'otb-return', label: 'OTB Return', count: 2, tone: 'blue', startNumber: 23 },
-    { id: 'dbox-sum', label: 'dBox+ Sum', count: 8, tone: 'lime', startNumber: 25 },
-    { id: 'adplus-in-a', label: 'AD+ In A', count: 2, tone: 'red', startNumber: 33 },
-    { id: 'atty-in', label: 'St.A / St.B / C / D', count: 6, tone: 'teal', startNumber: 35 },
-    { id: 'main-vu-in', label: 'VU In', count: 2, tone: 'amber', startNumber: 41 },
+    { id: 'dbox-sum', label: 'dBox+ Sum', count: 8, tone: 'lime', startNumber: 23 },
+    { id: 'adplus-in-a', label: 'AD+ In A', count: 2, tone: 'red', startNumber: 31 },
+    { id: 'atty-in', label: 'St.A / St.B / C / D', count: 6, tone: 'teal', startNumber: 33 },
+    { id: 'main-vu-in', label: 'VU In', count: 2, tone: 'amber', startNumber: 39 },
   ];
-  const selectedMicPoint = selectedMic ? micStartPoint(selectedMic.type) : 0;
+
+  // ── Bay 11: API Mix Buses ──
+  const apiMixTopSegments: PairedBaySegment[] = [
+    { id: 'api-mix-a-out', label: 'Mix A Out', count: 2, tone: 'amber', startNumber: 1 },
+    { id: 'api-mix-b-out', label: 'Mix B Out', count: 2, tone: 'amber', startNumber: 3 },
+    { id: 'api-master-out', label: 'Master Out', count: 2, tone: 'amber', startNumber: 5 },
+    { id: 'api-direct-outs', label: 'Direct Outs 1–16', count: 16, tone: 'orange', startNumber: 7 },
+    { id: 'api-cue-out', label: 'Cue Out', count: 2, tone: 'yellow', startNumber: 23 },
+  ];
+  const apiMixBottomSegments: PairedBaySegment[] = [
+    { id: 'api-ext-in', label: 'Ext Input (OTB)', count: 2, tone: 'amber', startNumber: 1 },
+    { id: 'api-mix-a-patch', label: 'Mix A Patch', count: 2, tone: 'amber', startNumber: 3 },
+    { id: 'api-mix-b-patch', label: 'Mix B Patch', count: 2, tone: 'amber', startNumber: 5 },
+    { id: 'api-talkback', label: 'Talkback', count: 1, tone: 'yellow', startNumber: 7 },
+  ];
+
+  // ── Bay 12: Pueblo / Tonelux OTB ──
+  const puebloTopSegments: PairedBaySegment[] = [
+    { id: 'pueblo-bank-a', label: 'Bank A', count: 8, tone: 'yellow', startNumber: 1, subLabels: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+    { id: 'pueblo-bank-b', label: 'Bank B', count: 8, tone: 'yellow', startNumber: 9, subLabels: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+    { id: 'pueblo-bank-c', label: 'Bank C', count: 8, tone: 'yellow', startNumber: 17, subLabels: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+    { id: 'pueblo-bank-d', label: 'Bank D', count: 8, tone: 'amber', startNumber: 25, subLabels: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+  ];
+  const puebloBottomSegments: PairedBaySegment[] = [
+    { id: 'pueblo-out-a', label: 'A Out', count: 2, tone: 'yellow', startNumber: 1 },
+    { id: 'pueblo-out-b', label: 'B Out', count: 2, tone: 'yellow', startNumber: 3 },
+    { id: 'pueblo-out-c', label: 'C Out', count: 2, tone: 'yellow', startNumber: 5 },
+    { id: 'pueblo-out-d', label: 'D Out', count: 2, tone: 'amber', startNumber: 7 },
+    { id: 'otb-ch-inputs', label: 'OTB Ch 1–8', count: 8, tone: 'orange', startNumber: 9, subLabels: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+    { id: 'otb-ext-in', label: 'OTB Ext In', count: 2, tone: 'orange', startNumber: 17 },
+    { id: 'otb-main-out', label: 'OTB Main', count: 2, tone: 'red', startNumber: 19 },
+    { id: 'otb-mon-out', label: 'OTB Mon', count: 2, tone: 'orange', startNumber: 21 },
+  ];
+
+  // ── Bay 13: AD+ / DAW ──
+  const adDawTopSegments: PairedBaySegment[] = [
+    { id: 'adplus-input-a', label: 'AD+ Input A', count: 2, tone: 'blue', startNumber: 1 },
+    { id: 'adplus-input-b', label: 'AD+ Input B', count: 2, tone: 'blue', startNumber: 3 },
+    { id: 'adplus-xformer-send', label: 'X-Fmr Send', count: 2, tone: 'purple', startNumber: 5 },
+    { id: 'adplus-xformer-return', label: 'X-Fmr Return', count: 2, tone: 'purple', startNumber: 7 },
+    { id: 'adplus-emphasis', label: 'Emphasis', count: 2, tone: 'violet', startNumber: 9 },
+  ];
+  const adDawBottomSegments: PairedBaySegment[] = [
+    { id: 'adplus-aes-out', label: 'AES Out', count: 2, tone: 'sky', startNumber: 1 },
+    { id: 'aurora-aes-in', label: 'Aurora AES In', count: 2, tone: 'sky', startNumber: 3 },
+    { id: 'dbox-aes-in', label: 'D-Box+ AES', count: 2, tone: 'lime', startNumber: 5 },
+    { id: 'dbox-analog-in', label: 'D-Box+ Analog', count: 2, tone: 'lime', startNumber: 7 },
+    { id: 'dbox-speakers-a', label: 'Spkr A', count: 2, tone: 'green', startNumber: 9 },
+    { id: 'dbox-speakers-b', label: 'Spkr B', count: 2, tone: 'green', startNumber: 11 },
+    { id: 'dbox-speakers-c', label: 'Spkr C', count: 2, tone: 'green', startNumber: 13 },
+  ];
+
+  const selectedMicPoint = selectedMic ? (() => {
+    const group = micGroups.find((g) => g.mics.some((m) => m.id === selectedMic.id));
+    if (!group) return 0;
+    const start = micStartPoint(group.label);
+    const idx = group.mics.findIndex((m) => m.id === selectedMic.id);
+    return start + idx;
+  })() : 0;
 
   const segmentInfo: Record<string, { title: string; description: string }> = {
-    // Bay 3 — DAW Outputs / Console Inputs
+    // Bay 1 — Preamp Outputs / DAW Inputs
+    'lynx-line-inputs': {
+      title: 'Lynx Aurora(n) Line Inputs',
+      description: 'Mastering-grade multichannel AD conversion feeding the DAW. SynchroLock 2 jitter elimination and dedicated converter arrays per channel pair deliver transparent capture with ultra-low crosstalk (−130 dB). These inputs receive mic preamp outputs for tracking or outboard returns for mixing.',
+    },
+    // Bay 2 — DAW Outputs / Console Inputs
     'lynx-line-outputs': {
       title: 'Lynx Aurora(n) Line Outputs',
       description: 'Mastering-grade multichannel DA conversion with dedicated converter arrays per channel pair for ultra-low crosstalk (−130 dB). SynchroLock 2 jitter elimination keeps the analog output pristine. These are clean, transparent line-level feeds from the DAW — the sonic character of this path is essentially whatever the session contains.',
     },
     'api-line-inputs': {
-      title: 'API ASM164 Line Inputs',
-      description: 'The 16-channel summing mixer\'s direct line inputs, driven by API 2510 input op-amps and 2520 output op-amps built to the same MIL-Spec standard as vintage API consoles. Each channel has per-channel panning and 31-step detented level control. Signals entering here are assigned to the Mix A or Mix B stereo program bus for analog summing.',
+      title: 'API ASM164 Line Inputs (Ch 1–16)',
+      description: 'The 16-channel summing mixer\'s direct line inputs, receiving Aurora outputs 1–16 via inline Tilt EQs (hardwired outside the patchbay). API 2510 input op-amps and 2520 output op-amps built to MIL-Spec standard. Each channel has per-channel panning, 31-step detented level control, and an always-active insert send/return. Signals are assigned to the Mix A or Mix B stereo program bus.',
     },
-    'pueblo-line-inputs': {
-      title: 'Pueblo Audio HJ482 Line Inputs',
-      description: 'A 48-input summing matrix organized across four independent 8×2 stereo banks (A–D). Ultra-low distortion (0.00094% THD), 127 dB dynamic range, and −103 dB crosstalk. Each bank can operate independently or cascade into Bank D as the main bus. Switchable output transformers add optional color.',
+    'otb-stem-inputs': {
+      title: 'Tonelux OTB-16 Stem Inputs (Ch 1–8)',
+      description: 'Eight overflow stem channels from Aurora outputs 17–24. The OTB sums these stems together with the FX tributary arriving on its external input and stamps the combined result through its TX-100 output transformer before feeding the API external input. Per-channel level and pan. TX-240/TX-260 discrete op-amp summing topology.',
     },
     // Bay 4 — Insert Sends / Returns
     'api-insert-sends': {
@@ -766,14 +885,6 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
       title: 'API ASM164 Master Return',
       description: 'Return path for the master bus insert. The last analog insertion point before the output stage.',
     },
-    'otb-send': {
-      title: 'Tonelux OTB Send',
-      description: 'Output from the Tonelux OTB analog summing unit. Adds organic cohesion and transformer-coupled warmth to stems summed through it. Designed for hybrid ITB/OTB workflows where digital stems benefit from analog ensemble character.',
-    },
-    'otb-return': {
-      title: 'Tonelux OTB Return',
-      description: 'Input to the Tonelux OTB summing unit. Signals patched here are summed through the OTB\'s transformer-coupled analog path.',
-    },
     'pueblo-banks': {
       title: 'Pueblo Audio HJ482 Sum Outputs',
       description: 'Stereo sum outputs from each of the four Pueblo banks (A–D). Each bank independently sums its assigned inputs to a stereo pair. Banks can cascade into Bank D for a final combined sum, or feed separate destinations for parallel stem management.',
@@ -806,10 +917,156 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
       title: 'McCurdy ATS-100 VU Input',
       description: 'Input to the McCurdy ATS-100 VU meter. Signals patched here are displayed on the VU meter for level monitoring. Typically fed from the master bus or print chain for final-stage metering.',
     },
+
+    // ── Bay 11: API Mix Bus Points ──
+    'api-mix-a-out': {
+      title: 'API ASM164 Mix A Output',
+      description: 'Stereo bus output from the Mix A program bus. This is the primary tracking sum — all channels assigned to Mix A converge here through the 2520 output stage and iron output transformer. Default destination is AD+ Input A for the print chain. The transformer imparts midrange density and subtle harmonic saturation that defines the "API sound."',
+    },
+    'api-mix-b-out': {
+      title: 'API ASM164 Mix B Output',
+      description: 'Stereo bus output from the Mix B program bus. Functions as an independent second stereo mix — commonly used for parallel stems, FX returns, or alternate mix versions. Same 2520/transformer topology as Mix A. Default destination is Pueblo Audio HJ482 for secondary sum processing.',
+    },
+    'api-master-out': {
+      title: 'API ASM164 Master Output',
+      description: 'Combined Mix A + Mix B stereo output after the master summing stage. This is the final analog output of the API — the sum of both program buses through the master 2520 output op-amp and iron transformer. Used when both buses need to converge to a single stereo destination.',
+    },
+    'api-direct-outs': {
+      title: 'API ASM164 Direct Outputs (Ch 1–16)',
+      description: 'Per-channel direct outputs tapped post-fader, post-pan but pre-bus assignment. These are always active — even when the channel is assigned to Mix A or B, the direct output carries the processed signal. Useful for multitrack printing through the API preamp/summing topology while simultaneously feeding the stereo bus.',
+    },
+    'api-cue-out': {
+      title: 'API ASM164 Cue Output',
+      description: 'Stereo cue bus output for headphone monitoring. Independent level and source selection allow performers to hear a different balance than the control room mix without affecting the program buses.',
+    },
+    'api-ext-in': {
+      title: 'API ASM164 External Input (OTB Feed)',
+      description: 'Stereo external input that feeds the Mix B bus path. This is where the Tonelux OTB tributary enters the API — the transformer-colored sum of overflow stems and FX returns merges into the console here, giving the engineer a single fader for the entire secondary bus contribution.',
+    },
+    'api-mix-a-patch': {
+      title: 'API ASM164 Mix A Bus Patch Point',
+      description: 'Direct patch access to the Mix A stereo bus. This interrupts the normalled path between the bus output and its default destination (AD+ Input A), allowing bus-level processing — a stereo compressor, EQ, or limiter can be inserted on the entire tracking sum before it reaches the converter.',
+    },
+    'api-mix-b-patch': {
+      title: 'API ASM164 Mix B Bus Patch Point',
+      description: 'Direct patch access to the Mix B stereo bus. Same function as the Mix A patch point but for the secondary bus. Useful for processing the parallel/overflow sum independently before it reaches the Pueblo.',
+    },
+    'api-talkback': {
+      title: 'API ASM164 Talkback',
+      description: 'Talkback microphone feed routed through the console. Sends engineer communication to the cue bus for performer headphones.',
+    },
+
+    // ── Bay 12: Pueblo / Tonelux OTB ──
+    'pueblo-bank-a': {
+      title: 'Pueblo Audio HJ482 — Bank A Inputs (1–8)',
+      description: 'Eight balanced inputs summed to a stereo pair. Active summing with +29 dBu headroom, 0.00094% THD, and 127 dB dynamic range — the quietest, cleanest summing stage in the entire system. Bank A can cascade into Bank B or operate independently with its own stereo output. 12 kΩ input impedance bridges any line-level source cleanly.',
+    },
+    'pueblo-bank-b': {
+      title: 'Pueblo Audio HJ482 — Bank B Inputs (1–8)',
+      description: 'Second bank of eight inputs. Receives Bank A cascade when cascading is engaged, otherwise operates independently. Same active topology and specifications as Bank A. Output is a stereo pair that can feed further cascading or an independent destination.',
+    },
+    'pueblo-bank-c': {
+      title: 'Pueblo Audio HJ482 — Bank C Inputs (1–8)',
+      description: 'Third bank of eight inputs. Continues the cascade chain from Bank B when engaged. Identical active summing topology. Useful for stem grouping — drums on one bank, synths on another — before they merge in Bank D for final summation.',
+    },
+    'pueblo-bank-d': {
+      title: 'Pueblo Audio HJ482 — Bank D Inputs (1–8) + Cascade Sum',
+      description: 'The final bank and the cascade terminus. When all four banks cascade, Bank D output is the combined 32-input sum. Unique to this bank: optional switchable output transformers add iron coloration to the final sum. Bank D stereo output is hardwired to AD+ Input B — the clean alternative print path that bypasses the API output stage entirely.',
+    },
+    'pueblo-out-a': {
+      title: 'Pueblo Bank A Stereo Output',
+      description: 'Independent stereo sum output from Bank A. Active and available even when cascading is engaged — banks always produce their own output alongside the cascade feed. Can route to a dedicated converter input for separate stem printing.',
+    },
+    'pueblo-out-b': {
+      title: 'Pueblo Bank B Stereo Output',
+      description: 'Independent stereo sum output from Bank B. Same topology and behavior as Bank A output.',
+    },
+    'pueblo-out-c': {
+      title: 'Pueblo Bank C Stereo Output',
+      description: 'Independent stereo sum output from Bank C.',
+    },
+    'pueblo-out-d': {
+      title: 'Pueblo Bank D Stereo Output → AD+ Input B',
+      description: 'The primary output of the cascade chain. When all banks cascade, this carries the full 32-input sum. Hardwired to Dangerous AD+ Input B — always ready as the clean print path. With optional transformers engaged, this is the one point in the Pueblo where iron can enter the signal.',
+    },
+    'otb-ch-inputs': {
+      title: 'Tonelux OTB-16 Channel Inputs (1–8)',
+      description: 'Eight stereo stem inputs from Aurora(n) outputs 17–24. Per-channel level and pan controls. TX-240/TX-260 discrete op-amp summing topology. These are the overflow DAW stems that exceed the API\'s 16-channel capacity — additional instrument groups, stem buses, or background layers.',
+    },
+    'otb-ext-in': {
+      title: 'Tonelux OTB-16 External Input',
+      description: 'Stereo external input that receives the D-Box+ summing output. This is where the FX tributary (reverbs, delays, spatial processors) re-enters the main analog path. The external input signal is summed with the OTB\'s eight stem channels before the output stage.',
+    },
+    'otb-main-out': {
+      title: 'Tonelux OTB-16 Main Output (Transformer)',
+      description: 'Transformer-balanced stereo output through the TX-100 output transformer. This is the "iron" output — the combined stems + FX tributary pass through Hammond iron, adding warmth, cohesion, and gentle transient rounding. Feeds the API external input, merging the tributary into the console.',
+    },
+    'otb-mon-out': {
+      title: 'Tonelux OTB-16 Monitor Output (Clean)',
+      description: 'Unbalanced stereo output that bypasses the TX-100 output transformer. Same summed signal without the iron coloration — useful for A/B comparison of the transformer\'s contribution or for feeding a destination that needs the clean version.',
+    },
+
+    // ── Bay 13: AD+ / DAW ──
+    'adplus-input-a': {
+      title: 'Dangerous AD+ Input A (API Print Path)',
+      description: 'Primary stereo analog input. Receives the API Mix A output — the transformer-colored tracking/mixing sum. Features a fixed input transformer always in the signal path plus optional Hammond X-Former insert. JetPLL jitter elimination and proprietary Clip Guard protect against digital clipping. +24 dBu maximum input level.',
+    },
+    'adplus-input-b': {
+      title: 'Dangerous AD+ Input B (Pueblo Clean Path)',
+      description: 'Secondary stereo analog input. Receives the Pueblo Bank D output — the clean sum that bypasses the API output stage. Front panel A/B switch selects which input feeds the converter. This is the "without iron" print option — when you want the mix without the API transformer\'s midrange density.',
+    },
+    'adplus-xformer-send': {
+      title: 'AD+ X-Former Insert Send',
+      description: 'Send point for the optional Hammond transformer insert. When engaged, the signal passes through two custom Hammond transformers for deliberate iron coloration on the final capture. This is an additive choice — stacking iron on top of the AD+ input transformer for a denser, more saturated print.',
+    },
+    'adplus-xformer-return': {
+      title: 'AD+ X-Former Insert Return',
+      description: 'Return from the Hammond transformer insert. The iron-processed signal re-enters the AD+ conversion path. The tonal effect is cumulative: input transformer + Hammond pair = three transformer stages on the print path.',
+    },
+    'adplus-emphasis': {
+      title: 'AD+ EMPHASIS Circuit',
+      description: 'Proprietary shelving EQ and compressor designed to add 2nd-order harmonic distortion — the "musical" harmonics. A mastering-grade tonal tool built into the converter: subtle warming and presence enhancement on the final print without needing an external processor.',
+    },
+    'adplus-aes-out': {
+      title: 'Dangerous AD+ AES Digital Output',
+      description: 'The point of no return — analog becomes digital here. AES/EBU stereo output through an output transformer. The last analog component in the entire signal chain. 118 dB dynamic range, JetPLL-locked digital clock. This feeds both the Aurora(n) for DAW capture and the D-Box+ for monitoring.',
+    },
+    'aurora-aes-in': {
+      title: 'Lynx Aurora(n) AES Input',
+      description: 'AES/EBU digital input on the Aurora(n). Receives the AD+ digital output for recording into the DAW. SynchroLock 2 jitter elimination re-clocks the incoming digital stream for sample-accurate capture. This is the final handoff before the signal becomes a DAW audio track.',
+    },
+    'dbox-aes-in': {
+      title: 'D-Box+ AES Monitor Input',
+      description: 'AES digital input on the D-Box+ monitor controller. Receives the AD+ output for real-time monitoring of the print signal. This is what you hear in the control room — the converted stereo mix, decoded back to analog through the D-Box+ DA section and fed to the speakers.',
+    },
+    'dbox-analog-in': {
+      title: 'D-Box+ Analog Monitor Input',
+      description: 'Stereo analog input on the D-Box+ monitor controller. An alternative monitoring path that bypasses A/D/A conversion — feed the analog mix directly to the speakers for latency-free monitoring or converter-bypass comparison.',
+    },
+    'dbox-speakers-a': {
+      title: 'D-Box+ Speaker Output A',
+      description: 'Primary speaker feed from the D-Box+ monitor controller. Independently trimmable per speaker set. The D-Box+ manages source selection (AES, Analog, SUM, USB, Bluetooth), mono/dim/mute, and level for this output.',
+    },
+    'dbox-speakers-b': {
+      title: 'D-Box+ Speaker Output B',
+      description: 'Secondary speaker feed. Typically a different speaker pair for cross-referencing the mix on a contrasting monitoring character — nearfield vs. midfield, for example.',
+    },
+    'dbox-speakers-c': {
+      title: 'D-Box+ Speaker Output C',
+      description: 'Third speaker feed. A third monitoring reference — often a smaller, more constrained speaker that reveals how the mix translates to limited playback systems.',
+    },
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4">
+    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-4 py-4">
+      <SignalFlowOverlay
+        containerRef={scrollContainerRef}
+        mode={mode}
+        selectedMic={selectedMic}
+        selectedPreamp={selectedPreamp}
+        insertChain={insertChain}
+        parallelChain={parallelChain}
+      />
       <div className={`mb-4 rounded-[1.6rem] border p-4 ${guideTheme.tray}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -828,31 +1085,31 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="relative z-[1] space-y-4">
         {patchRows.map((row) => {
           const active = rowActive(row.id, selectedMic, selectedPreamp, insertChain, parallelChain);
           const isNext = guide.rowId === row.id;
 
-          if (row.id === 'row-api-line-in' || row.id === 'row-insert-return' || row.id === 'row-spatial' || row.id === 'row-fx' || row.id === 'row-api-mix' || row.id === 'row-pueblo' || row.id === 'row-ad-daw') {
+          if (row.id === 'row-api-line-in' || row.id === 'row-insert-return' || row.id === 'row-spatial' || row.id === 'row-fx') {
             return null;
           }
 
           if (row.id === 'row-mic-ties') {
             const openSection = openSectionByRow[row.id] ?? null;
-            const activeGroup = openSection ? (micGroups.find((entry) => entry.type.toLowerCase().replace(/[^a-z0-9]+/g, '-') === openSection) ?? null) : null;
+            const activeGroup = openSection ? (micGroups.find((entry) => entry.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') === openSection) ?? null) : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="0" label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <StackedBayFace topSegments={toPairedSegments(micSegments)} bottomSegments={toPairedSegments(micSegments)} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
+              <RowShell key={row.id} rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext}>
+                <StackedBayFace rowId="row-mic-ties" topSegments={toPairedSegments(micSegments)} bottomSegments={preampInputSegments} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedPreampPoints} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
 
                 {activeGroup && (
-                  <DetailTray title={`${activeGroup.type} tie lines`} caption="Clicking the family header opens only this section. Each mic offers a direct add-to-chain action and a separate inspect action." toneClass="border-rose-900/60 bg-rose-950/18">
+                  <DetailTray title={`${activeGroup.label} tie lines`} caption="Clicking the family header opens only this section. Each mic offers a direct add-to-chain action and a separate inspect action." toneClass="border-rose-900/60 bg-rose-950/18">
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                       {activeGroup.mics.map((mic, index) => (
                         <CompactChoice
                           key={mic.id}
-                          pointNumber={micStartPoint(activeGroup.type) + index}
-                          tone={micTypeTone[activeGroup.type]}
+                          pointNumber={micStartPoint(activeGroup.label) + index}
+                          tone={activeGroup.tone}
                           title={mic.name}
                           meta={compactMeta([mic.type, `${mic.qty}x`, mic.patterns.join('/')])}
                           selected={selectedMic?.id === mic.id}
@@ -873,27 +1130,28 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
             const openSection = openSectionByRow[row.id] ?? null;
             const normalizedSection = openSection?.replace(/-inputs$/, '').replace(/-outputs$/, '') ?? null;
             const preampsInSection = normalizedSection === 'preamp-eq' ? preampEqUnits : standardPreamps;
-            const offset = normalizedSection === 'preamp-eq' ? standardPreamps.length : 0;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="1&2" label="PREAMP I/O" active={active} isNext={isNext}>
+              <RowShell key={row.id} rowId={row.id} order="1" label="PREAMP OUTPUTS / DAW INPUTS" active={active} isNext={isNext}>
                 <StackedBayFace
-                  topSegments={preampInputSegments}
-                  bottomSegments={preampOutputSegments}
-                  selectedTopPoints={selectedPreampPoint > 0 ? [selectedPreampPoint] : []}
-                  selectedBottomPoints={selectedPreampPoint > 0 ? [selectedPreampPoint] : []}
+                  rowId="row-preamp-in"
+                  topSegments={preampOutputSegments}
+                  bottomSegments={dawInputSegments}
+                  selectedTopPoints={selectedPreampPoints}
+                  selectedBottomPoints={[]}
                   openTopSegmentId={openSection}
                   onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
+                  onBottomSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
                   segmentButtonProps={{ 'data-row-section': row.id }}
                 />
 
                 {openSection && preampsInSection.length > 0 && (
                   <DetailTray title={normalizedSection === 'preamp-eq' ? 'Preamp / EQ units' : 'Standalone preamps'} caption={normalizedSection === 'preamp-eq' ? 'These units can serve as the first gain stage and can also donate their EQ section later as another analog stage.' : 'These are the direct first-stage choices. The selected preamp row stays highlighted after you commit one.'} toneClass="border-blue-900/60 bg-blue-950/18">
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                      {preampsInSection.map((preamp, index) => (
+                      {preampsInSection.map((preamp) => (
                         <CompactChoice
                           key={preamp.id}
-                          pointNumber={offset + index + 1}
+                          pointNumber={preampPointNumber(preamp.id)}
                           tone={openSection === 'preamp-eq' ? 'cyan' : 'blue'}
                           title={preamp.name}
                           meta={compactMeta([preamp.topology, `${preamp.channels}ch`, preamp.eq_features ?? null])}
@@ -912,6 +1170,12 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
                     </div>
                   </DetailTray>
                 )}
+
+                {openSection && openSection === 'lynx-line-inputs' && (
+                  <DetailTray title={segmentInfo['lynx-line-inputs'].title} caption={segmentInfo['lynx-line-inputs'].description} toneClass="border-green-900/60 bg-green-950/18">
+                    <div />
+                  </DetailTray>
+                )}
               </RowShell>
             );
           }
@@ -921,7 +1185,7 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="3" label="DAW OUTPUTS / CONSOLE INPUTS" active={active} isNext={isNext}>
+              <RowShell key={row.id} rowId={row.id} order="2" label="DAW OUTPUTS / CONSOLE INPUTS" active={active} isNext={isNext}>
                 <PhysicalPairedBay topSegments={dawOutputTopSegments} bottomSegments={dawOutputBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
 
                 {activeInfo && (
@@ -938,7 +1202,7 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="4" label="INSERT SENDS / RETURNS" active={active} isNext={isNext}>
+              <RowShell key={row.id} rowId={row.id} order="3" label="INSERT SENDS / RETURNS" active={active} isNext={isNext}>
                 <PhysicalPairedBay topSegments={insertSendSegments} bottomSegments={insertReturnSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
 
                 {activeInfo && (
@@ -956,7 +1220,7 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
 
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <StackedBayFace topSegments={toPairedSegments(compressorSegments)} bottomSegments={toPairedSegments(compressorSegments)} selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
+                <StackedBayFace rowId="row-dynamics" topSegments={toPairedSegments(compressorSegments)} bottomSegments={toPairedSegments(compressorSegments)} selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
 
                 {activeGroup && (
                   <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/60 bg-purple-950/18">
@@ -1011,7 +1275,7 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
 
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <StackedBayFace topSegments={toPairedSegments(combinedOutboardSegments)} bottomSegments={toPairedSegments(combinedOutboardSegments)} selectedTopPoints={combinedSelectedTop} selectedBottomPoints={combinedSelectedTop} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
+                <StackedBayFace rowId="row-eq" topSegments={toPairedSegments(combinedOutboardSegments)} bottomSegments={toPairedSegments(combinedOutboardSegments)} selectedTopPoints={combinedSelectedTop} selectedBottomPoints={combinedSelectedTop} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
 
                 {activeEntry && trayConfig && (
                   <DetailTray title={trayConfig.title} caption={trayConfig.caption} toneClass={trayConfig.toneClass}>
@@ -1065,93 +1329,62 @@ export default function PatchbayView({ perspective, selectedMic, selectedPreamp,
             );
           }
 
-          /* ── Bay 11–13 hidden pending redesign ──────────────────────────
           if (row.id === 'row-api-mix') {
+            const openSection = openSectionByRow[row.id] ?? null;
+            const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
+
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-amber-800/40 bg-amber-950/20 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Mix A</div>
-                    <div className="mt-1 text-sm text-zinc-100">Default tracking path</div>
-                    <p className="mt-2 text-xs leading-relaxed text-zinc-400">API channel path {'->'} stereo bus {'->'} Dangerous AD+ input A. This is the straightforward record path when you are not deliberately rerouting elsewhere.</p>
-                  </div>
-                  <div className="rounded-2xl border border-amber-800/40 bg-zinc-950/55 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200">Mix B</div>
-                    <div className="mt-1 text-sm text-zinc-100">Return lane for blended material</div>
-                    <p className="mt-2 text-xs leading-relaxed text-zinc-400">Parallel returns and overflow can land here so the dry route stays readable while wet or secondary material stays visibly separate.</p>
-                  </div>
-                </div>
+                <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+
+                {activeInfo && (
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/60 bg-amber-950/18">
+                    <div />
+                  </DetailTray>
+                )}
               </RowShell>
             );
           }
 
           if (row.id === 'row-pueblo') {
+            const openSection = openSectionByRow[row.id] ?? null;
+            const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
+
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-yellow-800/40 bg-yellow-950/18 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-yellow-100">Pueblo HJ482</div>
-                    <p className="mt-2 text-xs leading-relaxed text-zinc-400">32 inputs across four banks. Bank D stereo out is the visible continuation when the app needs to show the longer mix-side chain.</p>
-                  </div>
-                  <div className="rounded-2xl border border-yellow-800/40 bg-zinc-950/55 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-yellow-100">Tonelux OTB</div>
-                    <p className="mt-2 text-xs leading-relaxed text-zinc-400">Shared wet-return stage for blended branches. It gives the parallel side a clear home before material returns to Mix B.</p>
-                  </div>
-                </div>
+                <PhysicalPairedBay topSegments={puebloTopSegments} bottomSegments={puebloBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+
+                {activeInfo && (
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-yellow-900/60 bg-yellow-950/18">
+                    <div />
+                  </DetailTray>
+                )}
               </RowShell>
             );
           }
 
-          return (
-            <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-blue-800/40 bg-blue-950/20 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-blue-100">Dangerous AD+ input A</div>
-                  <div className="mt-1 text-xs text-zinc-400">Tracking commit</div>
-                </div>
-                <div className="rounded-2xl border border-blue-800/40 bg-zinc-950/55 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-blue-100">AES out</div>
-                  <div className="mt-1 text-xs text-zinc-400">Digital handoff leaves the analog field here.</div>
-                </div>
-                <div className="rounded-2xl border border-blue-800/40 bg-zinc-950/55 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-blue-100">Lynx Aurora(n) input 31</div>
-                  <div className="mt-1 text-xs text-zinc-400">The converter landing point that still matters before the workstation sees it.</div>
-                </div>
-                <div className="rounded-2xl border border-blue-800/40 bg-zinc-950/55 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-blue-100">DAW audio track source</div>
-                  <div className="mt-1 text-xs text-zinc-400">This is the final visible destination on the current tracking path.</div>
-                </div>
-              </div>
-            </RowShell>
-          );
-          ── end hidden bays ──────────────────────────────────────────── */
+          if (row.id === 'row-ad-daw') {
+            const openSection = openSectionByRow[row.id] ?? null;
+            const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
+
+            return (
+              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
+                <PhysicalPairedBay topSegments={adDawTopSegments} bottomSegments={adDawBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+
+                {activeInfo && (
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/60 bg-blue-950/18">
+                    <div />
+                  </DetailTray>
+                )}
+              </RowShell>
+            );
+          }
 
           return null;
         })}
       </div>
 
-      <section className="mt-4 overflow-hidden rounded-[1.7rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(16,18,21,0.98),rgba(8,10,12,0.98))]">
-        <div className="border-b border-zinc-800 px-4 py-3">
-          <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Full route transcription</div>
-          <div className="mt-1 text-sm text-zinc-100">The chain is spelled out beyond conversion so the endpoint is explicit and the route stays teachable.</div>
-        </div>
-        <div className="p-4">
-          <RouteReadout
-            perspective={perspective}
-            selectedMic={selectedMic}
-            selectedPreamp={selectedPreamp}
-            insertChain={insertChain}
-            parallelChain={parallelChain}
-            analysis={analysis}
-            onSelectMic={onSelectMic}
-            onSelectPreamp={onSelectPreamp}
-            onRemoveInsert={onRemoveInsert}
-            onRemoveParallel={onRemoveParallel}
-            onReorderInserts={onReorderInserts}
-            onInspect={onInspect}
-          />
-        </div>
-      </section>
+      <CascadeView mode={mode} perspective={perspective} />
     </div>
   );
 }

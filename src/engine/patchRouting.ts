@@ -224,6 +224,13 @@ function baseConnections(mic: Microphone | null, preamp: Preamp | null): PatchCo
   if (preamp) {
     connections.push(
       {
+        id: 'conn-preamp-internal',
+        from_endpoint_id: 'preamp-input',
+        to_endpoint_id: 'preamp-output',
+        mode: 'derived',
+        active: true,
+      },
+      {
         id: 'conn-preamp-to-api',
         from_endpoint_id: 'preamp-output',
         to_endpoint_id: 'api-line-input-1',

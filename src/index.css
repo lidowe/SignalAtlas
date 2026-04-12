@@ -25,3 +25,14 @@ body {
   background: rgba(34, 211, 238, 0.24);
   color: #f4f4f5;
 }
+
+/* Demo walkthrough: brief highlight pulse on the target row */
+@keyframes demo-ring-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
+  50%  { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+.demo-highlight {
+  animation: demo-ring-pulse 1.2s ease-out;
+}

@@ -1,8 +1,10 @@
 import { useStudio } from './hooks/useStudio';
+import { useDemoWalkthrough } from './hooks/useDemoWalkthrough';
 import Header from './components/Header';
 import PatchbayView from './components/PatchbayView';
 import ComponentInspector from './components/ComponentInspector';
 import AnalysisPanel from './components/AnalysisPanel';
+import SonicSignatureStrip from './components/SonicSignatureStrip';
 
 const shellTheme = {
   musician: {
@@ -26,6 +28,7 @@ function App() {
   const {
     state,
     setPerspective,
+    setMode,
     selectMic,
     selectPreamp,
     addInsert,
@@ -37,7 +40,23 @@ function App() {
     clearChain,
     equalizers,
     outboardProcessors,
+    microphones,
+    preamps,
+    compressors,
   } = useStudio();
+
+  const demo = useDemoWalkthrough({
+    mode: state.mode,
+    microphones,
+    preamps,
+    compressors,
+    equalizers,
+    onSelectMic: selectMic,
+    onSelectPreamp: selectPreamp,
+    onAddInsert: addInsert,
+    onClearChain: clearChain,
+    onSetMode: setMode,
+  });
 
   const theme = shellTheme[state.perspective];
 
@@ -45,7 +64,13 @@ function App() {
     <div className={`h-screen h-[100svh] flex flex-col text-zinc-200 overflow-hidden transition-colors duration-500 ${theme.frame}`}>
       <Header
         perspective={state.perspective}
+        mode={state.mode}
         onPerspective={setPerspective}
+        onMode={setMode}
+        demoState={demo.demoState}
+        demoNarration={demo.narration}
+        onStartDemo={demo.start}
+        onCancelDemo={demo.cancel}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -57,6 +82,7 @@ function App() {
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
           <PatchbayView
             perspective={state.perspective}
+            mode={state.mode}
             selectedMic={state.selectedMic}
             selectedPreamp={state.selectedPreamp}
             insertChain={state.insertChain}
@@ -74,9 +100,13 @@ function App() {
             outboardProcessors={outboardProcessors}
           />
 
+          {/* Live sonic signature readout */}
+          <SonicSignatureStrip signature={state.sonicSignature} />
+
           {/* Bottom analysis strip */}
           <AnalysisPanel
             perspective={state.perspective}
+            mode={state.mode}
             analysis={state.analysis}
             routeSummary={state.routeSummary}
             perspectiveInsight={state.perspectiveInsights[state.perspective]}

@@ -17,8 +17,73 @@ export type ConverterType = 'ADC' | 'DAC' | 'ADDA';
 export type EMZone = 'A' | 'B' | 'C';
 export type SignalDomain = 'mic' | 'line' | 'instrument' | 'speaker' | 'digital-audio' | 'digital-clock' | 'control';
 export type RouteStatus = 'incomplete' | 'default' | 'custom' | 'experimental' | 'warning';
+export type StudioMode = 'tracking' | 'mixing';
+export type NormalType = 'full-normal' | 'half-normal' | 'hardwired';
+export type CascadeRole = 'converter-source' | 'tributary-sum' | 'tributary-merge' | 'console' | 'parallel-sum' | 'master-converter' | 'monitor-controller';
 
 export interface FreqPoint { hz: number; mag_db: number; phase_deg?: number; }
+
+// ── Summing cascade node ──
+
+export interface SummingNode {
+  id: string;
+  name: string;
+  vendor: string;
+  role: CascadeRole;
+  max_input_dbu: number | null;        // null = unpublished
+  max_output_dbu: number | null;
+  noise_floor_dbu: number | null;
+  thd_percent: number | null;
+  dynamic_range_db: number | null;
+  transformer_count: number;
+  transformerless: boolean;
+  input_channels: number;
+  output_channels: number;
+  has_insert: boolean;
+  has_ext_input: boolean;
+  feeds_into: string[];                 // ids of downstream nodes
+  receives_from: string[];              // ids of upstream nodes
+  character: string;
+  engineering: string;
+}
+
+export interface CascadeConnection {
+  id: string;
+  from_node_id: string;
+  to_node_id: string;
+  normal_type: NormalType;
+  label: string;
+  active_in: StudioMode[];              // which modes this connection is live in
+}
+
+export interface MonitorSource {
+  id: string;
+  label: string;
+  description: string;
+  is_primary?: boolean;
+  is_diagnostic?: boolean;
+}
+
+export interface FxDiagnosticTap {
+  id: string;
+  label: string;
+  how: string;
+  what_you_hear: string;
+  listen_for: string;
+}
+
+export interface MonitorSpeaker {
+  id: string;
+  name: string;
+  vendor: string;
+  type: 'passive' | 'active';
+  amplifier?: string;
+  driver_config: string;
+  freq_range_hz: [number, number];
+  character: string;
+  engineering: string;
+  use_case: string;
+}
 
 export interface DescriptiveMetadata {
   context_tags?: string[];
@@ -328,4 +393,26 @@ export interface Session {
   chain: ChainNode[];
   analysis: ChainAnalysis | null;
   notes: string;
+}
+
+// ── Sonic Signature ──
+
+/** A single stage's tonal contribution to the cumulative signature. */
+export interface SonicStage {
+  name: string;
+  role: 'microphone' | 'preamp' | 'compressor' | 'equalizer' | 'outboard';
+  contribution: string;          // what this stage specifically adds
+  cumulativeSnapshot: string;    // how the chain reads after this stage
+}
+
+/** Structured tonal fingerprint that evolves with each chain addition. */
+export interface SonicSignature {
+  stages: SonicStage[];
+  summary: string;               // one-line evolving description
+  warmth: number;                // 0–1
+  clarity: number;               // 0–1
+  color: number;                 // 0–1
+  weight: number;                // 0–1 (low-end mass / body)
+  transientCharacter: string;    // e.g. "open", "controlled", "aggressive"
+  dominantQuality: string;       // the single strongest trait
 }

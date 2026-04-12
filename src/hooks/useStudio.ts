@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
-import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue } from '../types/studio';
+import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature } from '../types/studio';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
 import { equalizers } from '../data/equalizers';
 import { outboardProcessors } from '../data/outboard';
 import { analyzeMicPreamp, analyzeFullChain } from '../engine/signalChain';
+import { cascadeNodes } from '../data/cascade';
+import { buildSonicSignature } from '../engine/sonicSignature';
 import { buildPatchGraph } from '../engine/patchRouting';
 import { validatePatchGraph } from '../engine/routeValidation';
 import { buildDefaultParallelRouting, normalizeParallelRouting, parallelReturnDestinationOptions, parallelSendSourceOptions } from '../engine/routingTopology';
@@ -49,6 +51,7 @@ function buildDefaultParallelProcessor(proc: ParallelProcessorInput): ParallelPr
 
 export interface StudioState {
   perspective: Perspective;
+  mode: StudioMode;
   selectedMic: Microphone | null;
   selectedPreamp: Preamp | null;
   insertChain: InsertProcessor[];
@@ -59,6 +62,8 @@ export interface StudioState {
   routeValidation: RouteValidationIssue[];
   routeSummary: RouteSummaryModel;
   perspectiveInsights: Record<Perspective, PerspectiveInsightModel>;
+
+  sonicSignature: SonicSignature;
   inspectedId: string | null;
   searchQuery: string;
 }
@@ -77,6 +82,7 @@ export function useStudio() {
 
   const [state, setState] = useState<StudioState>({
     perspective: 'engineer',
+    mode: 'tracking' as StudioMode,
     selectedMic: null,
     selectedPreamp: null,
     insertChain: [],
@@ -87,11 +93,13 @@ export function useStudio() {
     routeValidation: initialRouteValidation,
     routeSummary: buildRouteSummary(null, null, [], [], null, initialRouteValidation),
     perspectiveInsights: buildInsights(null),
+    sonicSignature: buildSonicSignature(null, null, []),
     inspectedId: null,
     searchQuery: '',
   });
 
   const setPerspective = useCallback((p: Perspective) => setState(s => ({ ...s, perspective: p })), []);
+  const setMode = useCallback((m: StudioMode) => setState(s => ({ ...s, mode: m })), []);
   const setSearch = useCallback((q: string) => setState(s => ({ ...s, searchQuery: q })), []);
 
   const selectMic = useCallback((mic: Microphone | null) => {
@@ -107,6 +115,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(mic, s.selectedPreamp, s.insertChain, s.parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(mic, s.selectedPreamp, s.insertChain),
         inspectedId: mic?.id ?? null,
       };
     });
@@ -125,6 +134,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, pre, s.insertChain, s.parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, pre, s.insertChain),
         inspectedId: pre?.id ?? null,
       };
     });
@@ -144,6 +154,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, insertChain),
         inspectedId: proc.item.id,
       };
     });
@@ -168,6 +179,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, s.insertChain),
         inspectedId: parallelProc.item.id,
       };
     });
@@ -187,6 +199,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, s.insertChain),
       };
     });
   }, []);
@@ -220,6 +233,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, s.insertChain),
       };
     });
   }, []);
@@ -238,6 +252,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, insertChain),
       };
     });
   }, []);
@@ -258,6 +273,7 @@ export function useStudio() {
         routeValidation,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation),
         perspectiveInsights: buildInsights(analysis),
+        sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, insertChain),
       };
     });
   }, []);
@@ -277,6 +293,7 @@ export function useStudio() {
       routeValidation: initialRouteValidation,
       routeSummary: buildRouteSummary(null, null, [], [], null, initialRouteValidation),
       perspectiveInsights: buildInsights(null),
+      sonicSignature: buildSonicSignature(null, null, []),
       chain: [],
       parallelChain: [],
     }));
@@ -285,6 +302,7 @@ export function useStudio() {
   return {
     state,
     setPerspective,
+    setMode,
     setSearch,
     selectMic,
     selectPreamp,
@@ -304,5 +322,6 @@ export function useStudio() {
     routeValidation: state.routeValidation,
     parallelSendSourceOptions,
     parallelReturnDestinationOptions,
+    cascadeNodes,
   };
 }

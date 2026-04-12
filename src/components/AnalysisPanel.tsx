@@ -8,10 +8,12 @@ import type {
   PerspectiveInsightModel,
   Preamp,
   RouteSummaryModel,
+  StudioMode,
 } from '../types/studio';
 
 interface Props {
   perspective: Perspective;
+  mode: StudioMode;
   analysis: ChainAnalysis | null;
   routeSummary: RouteSummaryModel;
   perspectiveInsight: PerspectiveInsightModel;
@@ -233,9 +235,9 @@ function directionalOverview(
 }
 
 export default function AnalysisPanel({
-  perspective, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
+  perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
 }: Props) {
-  const [showRouteNotes, setShowRouteNotes] = useState(false);
+  const [showRouteNotes, setShowRouteNotes] = useState(true);
   const [showNarrativeDetails, setShowNarrativeDetails] = useState(false);
   const hasRouteNotes =
     routeSummary.deviations.length > 0 ||
@@ -245,15 +247,34 @@ export default function AnalysisPanel({
 
   if (!analysis || !selectedMic || !selectedPreamp) {
     if (!overview) {
-      return null;
+      // Nothing selected at all — show the monitor path as starting context
+      const prompt = mode === 'mixing'
+        ? 'Choose a DAW output channel to begin building a mix path.'
+        : 'Choose a microphone to begin building a capture path.';
+      return (
+        <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-2.5 backdrop-blur">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 space-y-1.5">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Listening through</div>
+            <div className="text-[11px] text-zinc-400 leading-relaxed">
+              DAW → Thunderbolt → Aurora(n) → AES → D-Box+ → Speakers.{' '}
+              <span className="text-zinc-500">The monitor path is digital from DAW to D-Box+. {prompt}</span>
+            </div>
+          </div>
+        </div>
+      );
     }
 
     return (
       <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-2 backdrop-blur">
         <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Signal overview</div>
-            <div className="mt-1 truncate text-[11px] text-zinc-300">{overview}</div>
+          <div className="min-w-0 space-y-1">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Building route</div>
+            <div className="truncate text-[11px] text-zinc-300">{overview}</div>
+            {selectedMic && !selectedPreamp && (
+              <div className="text-[10px] text-zinc-500 leading-relaxed">
+                {selectedMic.character.split('.')[0]}. Choose a preamp to complete the gain stage.
+              </div>
+            )}
           </div>
           {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
             <button onClick={onClearChain} className="shrink-0 rounded-full border border-zinc-800 px-2.5 py-1 text-[10px] text-zinc-500 hover:text-zinc-300">
@@ -291,49 +312,35 @@ export default function AnalysisPanel({
     technical: 'text-emerald-300',
   };
 
-  const viabilityStyles = {
-    ok: 'text-emerald-300 border-emerald-800/40 bg-emerald-950/20',
-    caution: 'text-yellow-300 border-yellow-800/40 bg-yellow-950/20',
-    blocked: 'text-red-300 border-red-800/40 bg-red-950/20',
-  };
-
   const parallelLines = parallelNarrative(perspective, parallelChain);
   const parallelPathSummary = parallelSummary(parallelChain);
 
   return (
-    <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-3 space-y-3 max-h-72 overflow-y-auto backdrop-blur">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className={`text-[10px] font-medium uppercase tracking-[0.22em] ${textAccents[perspective]}`}>{perspectiveLabels[perspective]}</div>
-          <div className="text-[11px] text-zinc-500 font-mono break-words">{chainSummary(selectedMic, selectedPreamp, insertChain)}</div>
-          {parallelPathSummary && <div className="text-[11px] text-cyan-300/90">Parallel support: {parallelPathSummary}</div>}
+    <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-3 space-y-2.5 max-h-64 overflow-y-auto backdrop-blur">
+      {/* Chain header + clear */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex items-center gap-2 overflow-hidden">
+          <div className={`text-[10px] font-medium uppercase tracking-[0.22em] shrink-0 ${textAccents[perspective]}`}>{perspectiveLabels[perspective]}</div>
+          <div className="text-[11px] text-zinc-500 font-mono truncate">{chainSummary(selectedMic, selectedPreamp, insertChain)}</div>
         </div>
         <button onClick={onClearChain} className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-full px-2.5 py-1 shrink-0">
           Clear
         </button>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-3 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Signal overview</span>
-            <span className="text-[10px] rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-zinc-400">{routeSummary.status}</span>
-          </div>
-          <p className="text-sm text-zinc-200">{routeSummary.headline}</p>
-          <div className={`rounded-lg border px-2.5 py-2 text-[11px] ${viabilityStyles[routeSummary.viability_flag.level]}`}>
-            {routeSummary.viability_flag.reason}
-          </div>
-          {routeSummary.gain_margin_summary && <div className="text-[11px] text-zinc-400">{routeSummary.gain_margin_summary}</div>}
-          {routeSummary.available_next_actions.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {routeSummary.available_next_actions.slice(0, 3).map((action) => (
-                <span key={action} className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400">{action}</span>
-              ))}
-            </div>
-          )}
+      {/* Path headline + gain margin */}
+      <div className="text-xs text-zinc-300 break-words leading-relaxed">{routeSummary.headline}</div>
+      {routeSummary.gain_margin_summary && <div className="text-[11px] text-zinc-400">{routeSummary.gain_margin_summary}</div>}
+      {routeSummary.viability_flag.level === 'caution' && (
+        <div className="rounded-lg border px-2.5 py-1.5 text-[11px] text-yellow-300 border-yellow-800/40 bg-yellow-950/20">
+          {routeSummary.viability_flag.reason}
         </div>
+      )}
 
-        <div className={`rounded-xl border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>
+      {parallelPathSummary && <div className="text-[11px] text-cyan-300/90">Parallel: {parallelPathSummary}</div>}
+
+      {/* Perspective narrative */}
+      <div className={`rounded-xl border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>
           <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">First reading</div>
           <p className={`text-sm leading-relaxed ${textAccents[perspective]}`}>{leadNarrative}</p>
           <p className="text-[11px] leading-relaxed text-zinc-400">{perspectiveInsight.summary}</p>
@@ -351,7 +358,6 @@ export default function AnalysisPanel({
             </button>
           )}
         </div>
-      </div>
 
       {showNarrativeDetails && (supportingNarrative.length > 0 || parallelLines.length > 1) && (
         <div className={`rounded-xl border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>

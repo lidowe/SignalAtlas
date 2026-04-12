@@ -112,13 +112,13 @@ export const patchRows: PatchRow[] = [
   { id: 'row-insert-send', label: 'API Insert Sends', order: 5, half_normal: true, category: 'signal-path', description: 'Half-normalled tap points on API ch 1–16 plus Mix A and Mix B bus inserts. Signal passes through unless a patch is made.' },
   { id: 'row-insert-return', label: 'API Insert Returns', order: 6, category: 'signal-path', description: 'Returns from outboard processing to API ch 1–16 plus Mix A and Mix B buses. Replaces the direct signal when patched.' },
 
-  // ── OUTBOARD POOL (not signal path — available gear for insert patching) ──
+  // ── OUTBOARD POOL (above summing — these are the choosable processors) ──
   { id: 'row-dynamics', label: 'Dynamics Rack', order: 7, category: 'outboard-pool', description: 'The Channel rack — all compressors, limiters, gates. Patch between insert sends and returns.' },
   { id: 'row-eq', label: 'Outboard', order: 8, category: 'outboard-pool', description: 'All equalizers. Patch between insert sends and returns. Langevin MMP, Retro 2A3, Iron Age V2, Chandler Tone Control ×2, Tonelux Equalux, Tilt EQ ×2.' },
   { id: 'row-spatial', label: 'Spatial / Harmonic Outboard', order: 9, category: 'outboard-pool', description: 'Patch-in inline processors such as stereo wideners and low-end harmonic enhancers. No static normal destination; use only where needed on stereo tracks, groups, or full mixes.' },
   { id: 'row-fx', label: 'Time-Based FX Returns', order: 10, category: 'outboard-pool', description: 'Reverbs and multi-FX generally run as parallel wet processors. Parallel feeds are broader than FX, but this row focuses on send-fed ambience returns through Tonelux OTB → API Mix B return.' },
 
-  // ── SUMMING & MONITORING ──
+  // ── SUMMING & CONVERSION (default destination — signal lands here unless rerouted) ──
   { id: 'row-api-mix', label: 'API Mix Buses', order: 11, category: 'summing', description: 'Mix A: tracking sum → AD+ input #1. Mix B: stereo bus and return point for wet FX, overflow, or other parallel-fed material returned from the Tonelux OTB.' },
   { id: 'row-pueblo', label: 'Pueblo HJ482 / Tonelux OTB', order: 12, category: 'summing', description: 'Pueblo: 32 inputs, 4 banks of 8 → sum to Bank D stereo out (optional transformer) → AD+ input #2. Tonelux: aggregate wet FX returns and overflow summing → API Mix B return.' },
   { id: 'row-ad-daw', label: 'Dangerous AD+ → DAW', order: 13, category: 'digital', description: 'AD+ input #1: API Mix A (tracking). AD+ input #2: Pueblo Bank D (mixing). Digital output → Aurora(n) → DAW via TB3.' },
