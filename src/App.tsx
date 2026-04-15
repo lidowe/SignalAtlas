@@ -31,6 +31,7 @@ function App() {
     state,
     setPerspective,
     setMode,
+    setSearch,
     selectMic,
     selectPreamp,
     addInsert,
@@ -67,6 +68,8 @@ function App() {
       <Header
         perspective={state.perspective}
         mode={state.mode}
+        searchQuery={state.searchQuery}
+        onSearch={setSearch}
         onPerspective={setPerspective}
         onMode={setMode}
         demoState={demo.demoState}
@@ -90,6 +93,7 @@ function App() {
             insertChain={state.insertChain}
             parallelChain={state.parallelChain}
             analysis={state.analysis}
+            searchQuery={state.searchQuery}
             onSelectMic={selectMic}
             onSelectPreamp={selectPreamp}
             onAddInsert={addInsert}

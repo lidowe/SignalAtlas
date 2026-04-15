@@ -4,6 +4,8 @@ import type { DemoState } from '../hooks/useDemoWalkthrough';
 interface Props {
   perspective: Perspective;
   mode: StudioMode;
+  searchQuery: string;
+  onSearch: (q: string) => void;
   onPerspective: (p: Perspective) => void;
   onMode: (m: StudioMode) => void;
   demoState: DemoState;
@@ -36,7 +38,7 @@ const headerTheme: Record<Perspective, { bar: string; active: string; chip: stri
   },
 };
 
-export default function Header({ perspective, mode, onPerspective, onMode, demoState, demoNarration, onStartDemo, onCancelDemo }: Props) {
+export default function Header({ perspective, mode, searchQuery, onSearch, onPerspective, onMode, demoState, demoNarration, onStartDemo, onCancelDemo }: Props) {
   const theme = headerTheme[perspective];
 
   return (
@@ -51,6 +53,15 @@ export default function Header({ perspective, mode, onPerspective, onMode, demoS
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <label className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors duration-500 ${theme.bar}`}>
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500">Jump</span>
+            <input
+              value={searchQuery}
+              onChange={(event) => onSearch(event.target.value)}
+              placeholder="gear, role, topology"
+              className="w-40 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600 sm:w-48"
+            />
+          </label>
           <div className={`flex items-center gap-2 rounded-full border px-2 py-1 transition-colors duration-500 ${theme.bar}`}>
             <span className="text-[10px] uppercase tracking-wide text-zinc-500">Mode</span>
             {(['tracking', 'mixing'] as StudioMode[]).map(m => (

@@ -28,6 +28,7 @@ interface Props {
   insertChain: InsertProcessor[];
   parallelChain: ParallelProcessor[];
   analysis: ChainAnalysis | null;
+  searchQuery: string;
   onSelectMic: (m: Microphone | null) => void;
   onSelectPreamp: (p: Preamp | null) => void;
   onAddInsert: (proc: InsertProcessor) => void;
@@ -709,7 +710,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   );
 }
 
-  export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
+  export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, searchQuery, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
     const [showCascadeView, setShowCascadeView] = useState(false);
@@ -814,9 +815,40 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     onAddParallel(processor);
   };
 
+  const scrollToRow = (rowId: string) => {
+    const target = scrollContainerRef.current?.querySelector<HTMLElement>(`[data-row-id="${rowId}"]`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const guide = nextStep(mode, selectedMic, selectedPreamp, insertChain, parallelChain);
   const guideTheme = perspectiveTheme[perspective];
   const routeChips = liveRouteLabels(selectedMic, selectedPreamp, insertChain, parallelChain);
+  const stageTargets = mode === 'mixing'
+    ? [
+        { label: 'Playback', rowId: 'row-preamp-out' },
+        { label: 'Insert path', rowId: 'row-insert-send' },
+        { label: 'Summing', rowId: 'row-api-mix' },
+        { label: 'Cascade', rowId: 'row-pueblo' },
+        { label: 'Print', rowId: 'row-ad-daw' },
+      ]
+    : [
+        { label: 'Source', rowId: 'row-mic-ties' },
+        { label: 'Gain', rowId: 'row-preamp-in' },
+        { label: 'Dynamics', rowId: 'row-dynamics' },
+        { label: 'Tone', rowId: 'row-eq' },
+        { label: 'Capture', rowId: 'row-ad-daw' },
+      ];
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const quickResults = normalizedQuery
+    ? [
+        ...microphones.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: micTypeTone[item.type], onUse: () => onSelectMic(item), onInspect: () => onInspect(item.id), actionLabel: 'Use source' })),
+        ...preamps.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: hasStandaloneEqSection(item) ? 'cyan' as BayTone : 'blue' as BayTone, onUse: () => onSelectPreamp(item), onInspect: () => onInspect(item.id), actionLabel: 'Use preamp' })),
+        ...compressors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: 'purple' as BayTone, onUse: () => toggleInsert({ type: 'compressor', item }), onInspect: () => onInspect(item.id), actionLabel: 'Insert' })),
+        ...equalizers.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: 'teal' as BayTone, onUse: () => toggleInsert({ type: 'equalizer', item }), onInspect: () => onInspect(item.id), actionLabel: 'Insert EQ' })),
+        ...outboardProcessors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: item.routing_mode === 'parallel-send-return' ? 'sky' as BayTone : 'cyan' as BayTone, onUse: () => item.routing_mode === 'parallel-send-return' ? toggleParallel({ type: 'outboard', item }) : toggleInsert({ type: 'outboard', item }), onInspect: () => onInspect(item.id), actionLabel: item.routing_mode === 'parallel-send-return' ? 'Blend return' : 'Insert' })),
+      ].filter((entry) => `${entry.title} ${entry.subtitle}`.toLowerCase().includes(normalizedQuery)).slice(0, 8)
+    : [];
   const micSegments: BaySegment[] = (() => {
     const nonDynamic = micGroups.filter((g) => g.label !== 'Dynamic');
     const dynamicGroup = micGroups.find((g) => g.label === 'Dynamic');
@@ -1216,6 +1248,14 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         insertChain={insertChain}
         parallelChain={parallelChain}
       />
+      <div className="mb-3 flex flex-wrap gap-2">
+        {stageTargets.map((target) => (
+          <ActionButton key={target.rowId} type="button" tone="zinc" onClick={() => scrollToRow(target.rowId)}>
+            {target.label}
+          </ActionButton>
+        ))}
+      </div>
+
       <div className={`mb-4 rounded-[1rem] border p-4 shadow-[0_16px_45px_rgba(0,0,0,0.22)] ${guideTheme.tray}`}>
         <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
           <div className="space-y-2">
@@ -1248,6 +1288,33 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
           </div>
         </div>
       </div>
+
+      {normalizedQuery && (
+        <div className="relative z-[1] mb-4 rounded-[0.9rem] border border-zinc-800 bg-zinc-950/70 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.22)]">
+          <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-zinc-500">Quick gear access</div>
+          {quickResults.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {quickResults.map((result) => (
+                <div key={result.id} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full border ${bayToneClasses[result.tone].socket}`}>•</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-zinc-100">{result.title}</div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500">{result.subtitle}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <ActionButton type="button" tone="amber" onClick={result.onUse}>{result.actionLabel}</ActionButton>
+                        <ActionButton type="button" onClick={result.onInspect}>Inspect</ActionButton>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-zinc-500">No direct match yet. Try a vendor, model, or topology.</div>
+          )}
+        </div>
+      )}
 
       <div className="relative z-[1] space-y-4">
         {patchRows.map((row) => {
