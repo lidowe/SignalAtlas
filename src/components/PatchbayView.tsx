@@ -210,6 +210,35 @@ function SectionMarker({ title, subtitle }: { title: string; subtitle: string })
   );
 }
 
+function FocusCard({
+  title,
+  value,
+  detail,
+  tone,
+  onClick,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  tone: 'amber' | 'blue' | 'teal' | 'violet';
+  onClick: () => void;
+}) {
+  const tones = {
+    amber: 'border-amber-800/40 bg-amber-950/18 text-amber-100',
+    blue: 'border-blue-800/40 bg-blue-950/18 text-blue-100',
+    teal: 'border-teal-800/40 bg-teal-950/18 text-teal-100',
+    violet: 'border-violet-800/40 bg-violet-950/18 text-violet-100',
+  } as const;
+
+  return (
+    <button type="button" onClick={onClick} className={`rounded-[0.9rem] border px-3 py-3 text-left transition hover:border-zinc-600 hover:bg-zinc-950/70 ${tones[tone]}`}>
+      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{title}</div>
+      <div className="mt-1 text-sm font-medium">{value}</div>
+      <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">{detail}</div>
+    </button>
+  );
+}
+
 function hasStandaloneEqSection(preamp: Preamp): boolean {
   return preamp.eq_features != null;
 }
@@ -367,7 +396,13 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
   const normalMode = rowNormalMode(rowId);
 
   return (
-    <section data-row-id={rowId} className={`rounded-[1rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${focusClass} ${isNext ? 'ring-1 ring-inset ring-amber-200/28' : ''}`}>
+    <section data-row-id={rowId} className={`relative overflow-hidden rounded-[1rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${focusClass} ${isNext ? 'ring-1 ring-inset ring-amber-200/28' : ''}`}>
+      <div className="pointer-events-none absolute inset-0">
+        <span className="absolute left-2 top-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
+        <span className="absolute right-2 top-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
+        <span className="absolute bottom-2 left-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
+        <span className="absolute bottom-2 right-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
+      </div>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-zinc-500">
@@ -1248,6 +1283,37 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         insertChain={insertChain}
         parallelChain={parallelChain}
       />
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <FocusCard
+          title="Source"
+          value={selectedMic?.name ?? (mode === 'mixing' ? 'DAW playback' : 'Awaiting source')}
+          detail={mode === 'mixing' ? 'Playback stems are already feeding the console path.' : 'Choose the voice entering the room.'}
+          tone="amber"
+          onClick={() => scrollToRow(mode === 'mixing' ? 'row-preamp-out' : 'row-mic-ties')}
+        />
+        <FocusCard
+          title="Gain"
+          value={selectedPreamp?.name ?? (mode === 'mixing' ? 'Console input path' : 'Awaiting preamp')}
+          detail={mode === 'mixing' ? 'Line outputs are normalled into the summing field.' : 'This stage determines how the source arrives.'}
+          tone="blue"
+          onClick={() => scrollToRow(mode === 'mixing' ? 'row-insert-send' : 'row-preamp-in')}
+        />
+        <FocusCard
+          title="Process"
+          value={insertChain.length + parallelChain.length > 0 ? `${insertChain.length} insert · ${parallelChain.length} parallel` : 'Default path only'}
+          detail="Open the outboard field only when the sound earns the commitment."
+          tone="violet"
+          onClick={() => scrollToRow('row-dynamics')}
+        />
+        <FocusCard
+          title="Destination"
+          value={mode === 'mixing' ? 'Summing → print' : 'Capture → recorder'}
+          detail={mode === 'mixing' ? 'API, Pueblo, and AD+ define the final handoff.' : 'The default route reaches the converter without extra work.'}
+          tone="teal"
+          onClick={() => scrollToRow('row-ad-daw')}
+        />
+      </div>
+
       <div className="mb-3 flex flex-wrap gap-2">
         {stageTargets.map((target) => (
           <ActionButton key={target.rowId} type="button" tone="zinc" onClick={() => scrollToRow(target.rowId)}>
