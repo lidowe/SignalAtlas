@@ -51,16 +51,9 @@ function centroid(pts: PointRect[]): { x: number; y: number } | null {
 }
 
 // ── Default monitor path row order (always visible) ──
-const MONITOR_ROWS = [
-  'row-api-mix', 'row-pueblo', 'row-ad-daw',
-];
-
-// ── Full capture path row order ──
-const CAPTURE_ROWS = [
-  'row-mic-ties', 'row-preamp-in', 'row-preamp-out', 'row-insert-send',
-  'row-dynamics', 'row-eq',
-  'row-api-mix', 'row-pueblo', 'row-ad-daw',
-];
+const MONITOR_ROWS = ['row-api-mix', 'row-pueblo', 'row-ad-daw'];
+const TRACKING_ROWS = ['row-mic-ties', 'row-preamp-in', 'row-dynamics', 'row-eq', 'row-ad-daw'];
+const MIXING_ROWS = ['row-preamp-out', 'row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw'];
 
 export default function SignalFlowOverlay({
   containerRef,
@@ -154,28 +147,36 @@ export default function SignalFlowOverlay({
   }
   const monitorPathD = buildBezier(monitorWaypoints);
 
-  // ── 2. Active selection line (from user's circles) ──
+  // ── 2. Active selection line (from user's circles and mode defaults) ──
   const selectionWaypoints: Array<{ x: number; y: number }> = [];
+  const activeRows = mode === 'mixing' ? MIXING_ROWS : TRACKING_ROWS;
 
-  const micPts = points.filter(p => p.rowId === 'row-mic-ties' && p.position === 'top');
-  const mic = centroid(micPts);
-  if (mic) selectionWaypoints.push(mic);
+  if (mode === 'mixing') {
+    activeRows.forEach((rowId) => {
+      const row = rows.get(rowId);
+      if (row) selectionWaypoints.push({ x: row.centerX, y: row.centerY });
+    });
+  } else {
+    const micPts = points.filter(p => p.rowId === 'row-mic-ties' && p.position === 'top');
+    const mic = centroid(micPts);
+    if (mic) selectionWaypoints.push(mic);
 
-  const preampBottom = points.filter(p => p.rowId === 'row-mic-ties' && p.position === 'bottom');
-  const preBot = centroid(preampBottom);
-  if (preBot) selectionWaypoints.push(preBot);
+    const preampBottom = points.filter(p => p.rowId === 'row-mic-ties' && p.position === 'bottom');
+    const preBot = centroid(preampBottom);
+    if (preBot) selectionWaypoints.push(preBot);
 
-  const preampTop = points.filter(p => p.rowId === 'row-preamp-in' && p.position === 'top');
-  const preTop = centroid(preampTop);
-  if (preTop) selectionWaypoints.push(preTop);
+    const preampTop = points.filter(p => p.rowId === 'row-preamp-in' && p.position === 'top');
+    const preTop = centroid(preampTop);
+    if (preTop) selectionWaypoints.push(preTop);
 
-  const dynPts = points.filter(p => p.rowId === 'row-dynamics');
-  const dyn = centroid(dynPts);
-  if (dyn) selectionWaypoints.push(dyn);
+    const dynPts = points.filter(p => p.rowId === 'row-dynamics');
+    const dyn = centroid(dynPts);
+    if (dyn) selectionWaypoints.push(dyn);
 
-  const eqPts = points.filter(p => p.rowId === 'row-eq');
-  const eq = centroid(eqPts);
-  if (eq) selectionWaypoints.push(eq);
+    const eqPts = points.filter(p => p.rowId === 'row-eq');
+    const eq = centroid(eqPts);
+    if (eq) selectionWaypoints.push(eq);
+  }
 
   const selectionPathD = buildBezier(selectionWaypoints);
 
@@ -185,8 +186,8 @@ export default function SignalFlowOverlay({
 
   if (lastSel && selectionWaypoints.length >= 1) {
     const contPts: Array<{ x: number; y: number }> = [lastSel];
-    // Walk capture rows that come after the last selected Y position
-    for (const rowId of CAPTURE_ROWS) {
+    // Walk the active mode rows that come after the last selected Y position
+    for (const rowId of activeRows) {
       const row = rows.get(rowId);
       if (row && row.centerY > lastSel.y + 10) {
         contPts.push({ x: row.centerX, y: row.centerY });

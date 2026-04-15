@@ -41,6 +41,7 @@ interface Props {
 }
 
 type BayTone = 'rose' | 'red' | 'orange' | 'amber' | 'yellow' | 'lime' | 'green' | 'teal' | 'cyan' | 'sky' | 'blue' | 'violet' | 'purple' | 'slate';
+type BayNormalMode = 'full-normal' | 'half-normal' | 'patch-only';
 
 interface BaySegment {
   id: string;
@@ -141,6 +142,67 @@ const perspectiveTheme: Record<Perspective, { label: string; badge: string; tray
   },
 };
 
+const modeFocusedRows: Record<StudioMode, Set<string>> = {
+  tracking: new Set(['row-mic-ties', 'row-preamp-in', 'row-dynamics', 'row-eq', 'row-ad-daw']),
+  mixing: new Set(['row-preamp-out', 'row-insert-send', 'row-dynamics', 'row-eq', 'row-api-mix', 'row-pueblo', 'row-ad-daw']),
+};
+
+const normalModeMeta: Record<BayNormalMode, { label: string; badge: string; bridge: string }> = {
+  'full-normal': {
+    label: 'Full normal',
+    badge: 'border-emerald-700/40 bg-emerald-950/40 text-emerald-200',
+    bridge: 'bg-emerald-300/80',
+  },
+  'half-normal': {
+    label: 'Half normal',
+    badge: 'border-amber-700/40 bg-amber-950/35 text-amber-200',
+    bridge: 'border-l border-dashed border-amber-200/80',
+  },
+  'patch-only': {
+    label: 'Patch field',
+    badge: 'border-zinc-700 bg-zinc-900/70 text-zinc-300',
+    bridge: 'bg-zinc-700/35',
+  },
+};
+
+function rowNormalMode(rowId: string): BayNormalMode {
+  switch (rowId) {
+    case 'row-mic-ties':
+      return 'full-normal';
+    case 'row-preamp-in':
+    case 'row-preamp-out':
+    case 'row-insert-send':
+    case 'row-api-mix':
+    case 'row-pueblo':
+      return 'half-normal';
+    default:
+      return 'patch-only';
+  }
+}
+
+function liveRouteLabels(selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): string[] {
+  const labels = [
+    selectedMic?.name,
+    selectedPreamp?.name,
+    ...insertChain.map((processor) => processor.item.name),
+    ...parallelChain.map((processor) => `${processor.item.name} return`),
+  ].filter(Boolean) as string[];
+
+  return labels.slice(0, 6);
+}
+
+function NormalLegend() {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {(['full-normal', 'half-normal', 'patch-only'] as BayNormalMode[]).map((mode) => (
+        <span key={mode} className={`rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${normalModeMeta[mode].badge}`}>
+          {normalModeMeta[mode].label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function hasStandaloneEqSection(preamp: Preamp): boolean {
   return preamp.eq_features != null;
 }
@@ -204,12 +266,36 @@ function groupByLabel<T>(items: T[], getLabel: (item: T) => string): Array<{ id:
   return Array.from(groups.entries()).map(([id, group]) => ({ id, label: group.label, items: group.items }));
 }
 
-function nextStep(selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[]): { rowId: string; heading: string; body: string } {
+function nextStep(mode: StudioMode, selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): { rowId: string; heading: string; body: string } {
+  if (mode === 'mixing') {
+    if (insertChain.length === 0 && parallelChain.length === 0) {
+      return {
+        rowId: 'row-preamp-out',
+        heading: 'Summing path armed',
+        body: 'Playback already lands in the summing core through the default normals. Open a bus insert or return path only when the mix needs a deliberate departure.',
+      };
+    }
+
+    if (parallelChain.length > 0) {
+      return {
+        rowId: 'row-pueblo',
+        heading: 'Parallel color is in play',
+        body: 'The return path is now part of the console story. Follow how the tributary rejoins the mix and confirm that the extra width or space earns its place.',
+      };
+    }
+
+    return {
+      rowId: 'row-api-mix',
+      heading: 'Bus path is active',
+      body: 'You are no longer hearing only the default mix path. The bus field below now determines how the analog sum behaves before print.',
+    };
+  }
+
   if (!selectedMic) {
     return {
       rowId: 'row-mic-ties',
       heading: 'Mic tie lines',
-      body: 'Start by picking a mic from the mic tie lines to learn more or begin your signal path.',
+      body: 'Start on the source side. Choose a microphone and let the normalled capture path reveal how the studio is already prepared to record.',
     };
   }
 
@@ -217,26 +303,30 @@ function nextStep(selectedMic: Microphone | null, selectedPreamp: Preamp | null,
     return {
       rowId: 'row-preamp-in',
       heading: 'Choose the first gain stage',
-      body: `${selectedMic.name} is live. Patch it into a preamp so the normalled route can continue all the way to the recorder.`,
+      body: `${selectedMic.name} is waiting at the bay. Patch it into a preamp so the default route can continue cleanly to capture.`,
     };
   }
 
-  if (insertChain.length === 0) {
+  if (insertChain.length === 0 && parallelChain.length === 0) {
     return {
       rowId: 'row-dynamics',
-      heading: 'The route is already complete',
-      body: 'You are already reaching the recorder. Open dynamics, EQ, spatial, or FX only if you want to depart from the default path.',
+      heading: 'Default capture path is complete',
+      body: 'You are already reaching the recorder. Open the outboard field only if you want to commit extra shape, control, or character on the way in.',
     };
   }
 
   return {
     rowId: 'row-ad-daw',
-    heading: 'Read the full consequence',
-    body: 'The custom chain is active. Follow the explicit route below and confirm the extra analog stages are worth the commitment.',
+    heading: 'Custom signal path active',
+    body: 'The route now departs from the studio default. Trace it through the panels below and make sure every added stage is worth the commitment.',
   };
 }
 
-function rowActive(rowId: string, selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): boolean {
+function rowActive(rowId: string, mode: StudioMode, selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): boolean {
+  if (mode === 'mixing' && ['row-preamp-out', 'row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw'].includes(rowId)) {
+    return true;
+  }
+
   switch (rowId) {
     case 'row-mic-ties':
       return selectedMic != null;
@@ -249,7 +339,7 @@ function rowActive(rowId: string, selectedMic: Microphone | null, selectedPreamp
     case 'row-api-mix':
     case 'row-pueblo':
     case 'row-ad-daw':
-      return selectedPreamp != null;
+      return selectedPreamp != null || mode === 'mixing';
     case 'row-dynamics':
       return insertChain.some((processor) => processor.type === 'compressor') || parallelChain.some((processor) => processor.type === 'compressor');
     case 'row-eq':
@@ -263,15 +353,24 @@ function rowActive(rowId: string, selectedMic: Microphone | null, selectedPreamp
   }
 }
 
-function RowShell({ rowId, order, label, active, isNext, children }: { rowId: string; order: number | string; label: string; active: boolean; isNext: boolean; children: ReactNode }) {
+function RowShell({ rowId, order, label, active, isNext, mode, children }: { rowId: string; order: number | string; label: string; active: boolean; isNext: boolean; mode: StudioMode; children: ReactNode }) {
+  const focusClass = modeFocusedRows[mode].has(rowId)
+    ? 'ring-1 ring-inset ring-zinc-100/14 shadow-[0_18px_50px_rgba(0,0,0,0.28)]'
+    : 'opacity-90';
+  const normalMode = rowNormalMode(rowId);
+
   return (
-    <section data-row-id={rowId} className={`rounded-[1.6rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${isNext ? 'ring-1 ring-inset ring-zinc-100/18' : ''}`}>
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+    <section data-row-id={rowId} className={`rounded-[1rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${focusClass} ${isNext ? 'ring-1 ring-inset ring-amber-200/28' : ''}`}>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/80 text-zinc-300">{order}</span>
-            <span>{label}</span>
-            {active && <span className="rounded-full border border-zinc-700 bg-zinc-900/70 px-2 py-0.5 text-[9px] text-zinc-300">active</span>}
+            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/90 px-1 text-zinc-300">{order}</span>
+            <span className="text-zinc-200">{label}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className={`rounded-md border px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] ${normalModeMeta[normalMode].badge}`}>{normalModeMeta[normalMode].label}</span>
+            {active && <span className="rounded-md border border-zinc-700 bg-zinc-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-zinc-200">Signal live</span>}
+            {modeFocusedRows[mode].has(rowId) && <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-zinc-400">{mode === 'tracking' ? 'Capture focus' : 'Mix focus'}</span>}
           </div>
         </div>
       </div>
@@ -282,7 +381,7 @@ function RowShell({ rowId, order, label, active, isNext, children }: { rowId: st
 
 function DetailTray({ title, caption, children, toneClass }: { title: string; caption: string; children: ReactNode; toneClass: string }) {
   return (
-    <div className={`mt-2 rounded-[1.15rem] border p-2.5 md:p-3 ${toneClass}`}>
+    <div className={`mt-2 rounded-[0.9rem] border p-2.5 md:p-3 ${toneClass}`}>
       <div className="mb-2">
         <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Detail tray</div>
         <div className="mt-1 text-sm font-medium text-zinc-100">{title}</div>
@@ -327,6 +426,7 @@ function StackedBayFace({
   openBottomSegmentId,
   onBottomSegmentClick,
   segmentButtonProps,
+  normalMode = 'patch-only',
 }: {
   rowId: string;
   topSegments: PairedBaySegment[];
@@ -338,12 +438,20 @@ function StackedBayFace({
   openBottomSegmentId?: string | null;
   onBottomSegmentClick?: (segmentId: string) => void;
   segmentButtonProps?: SegmentButtonProps;
+  normalMode?: BayNormalMode;
 }) {
   const topEntries = expandBaySegments(topSegments);
   const bottomEntries = expandBaySegments(bottomSegments);
   const totalColumns = Math.max(topEntries.length, bottomEntries.length, BAY_ROW_LENGTH);
   const selectedTop = new Set(selectedTopPoints);
   const selectedBottom = new Set(selectedBottomPoints);
+
+  const bridgeClassForColumn = (hasPair: boolean) => {
+    if (!hasPair) return 'bg-zinc-900/40';
+    if (normalMode === 'full-normal') return 'bg-emerald-300/80';
+    if (normalMode === 'half-normal') return 'border-l border-dashed border-amber-200/80';
+    return 'bg-zinc-700/35';
+  };
 
   const renderStrip = (segments: PairedBaySegment[], activeSegmentId?: string | null, onClick?: (segmentId: string) => void) => {
     const usedColumns = segments.reduce((sum, segment) => sum + segment.count, 0);
@@ -352,12 +460,12 @@ function StackedBayFace({
       <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
         {segments.map((segment) => {
           const content = segment.subLabels ? (
-            <div className={`rounded-lg px-0.5 py-0.5 text-center ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
+            <div className={`rounded-md px-0.5 py-0.5 text-center ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
               <div className="text-[7px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
               <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
             </div>
           ) : (
-            <span className={`block truncate rounded-full px-0.5 py-0.5 text-center text-[7px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
+            <span className={`block truncate rounded-md px-0.5 py-0.5 text-center text-[7px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
               {segment.label}
             </span>
           );
@@ -373,7 +481,7 @@ function StackedBayFace({
           );
         })}
         {usedColumns < totalColumns && (
-          <div className="rounded-full border border-zinc-800 bg-zinc-900/85 px-2 py-1 text-center text-[9px] uppercase tracking-[0.18em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - usedColumns} / span ${totalColumns - usedColumns}` }}>
+          <div className="rounded-md border border-zinc-800 bg-zinc-900/85 px-2 py-1 text-center text-[9px] uppercase tracking-[0.18em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - usedColumns} / span ${totalColumns - usedColumns}` }}>
             open
           </div>
         )}
@@ -401,12 +509,31 @@ function StackedBayFace({
     </div>
   );
 
+  const renderBridgeRow = () => (
+    <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
+      {Array.from({ length: totalColumns }, (_, index) => {
+        const hasPair = Boolean(topEntries[index] && bottomEntries[index]);
+        return (
+          <div key={`bridge-${index}`} className="flex justify-center">
+            <span className={`h-3 w-px ${bridgeClassForColumn(hasPair)}`} />
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
-    <div className="rounded-[1.25rem] border border-zinc-800 bg-[#0d0f11] px-2.5 py-2.5">
+    <div className="rounded-[1rem] border border-zinc-700 bg-[linear-gradient(180deg,rgba(18,20,24,0.98),rgba(9,11,13,0.98))] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="mb-2 flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+        <span>Top row</span>
+        <span>{normalModeMeta[normalMode].label}</span>
+        <span>Bottom row</span>
+      </div>
       <div className="overflow-x-auto pb-1">
-        <div className="min-w-max space-y-2">
+        <div className="min-w-max space-y-1.5">
           {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
           {renderSocketRow(topEntries, selectedTop, 'top')}
+          {renderBridgeRow()}
           {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
           {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
         </div>
@@ -420,11 +547,13 @@ function PhysicalPairedBay({
   bottomSegments,
   openSegmentId,
   onSegmentClick,
+  normalMode = 'half-normal',
 }: {
   topSegments: PairedBaySegment[];
   bottomSegments: PairedBaySegment[];
   openSegmentId?: string | null;
   onSegmentClick?: (segmentId: string) => void;
+  normalMode?: BayNormalMode;
 }) {
   const totalColumns = Math.max(
     topSegments.reduce((sum, segment) => sum + segment.count, 0),
@@ -436,9 +565,14 @@ function PhysicalPairedBay({
   const bottomEntries = expandBaySegments(bottomSegments);
 
   return (
-    <div className="rounded-[1.25rem] border border-zinc-800 bg-[#0d0f11] px-2.5 py-2.5">
+    <div className="rounded-[1rem] border border-zinc-700 bg-[linear-gradient(180deg,rgba(18,20,24,0.98),rgba(9,11,13,0.98))] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="mb-2 flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+        <span>Top row</span>
+        <span>{normalModeMeta[normalMode].label}</span>
+        <span>Bottom row</span>
+      </div>
       <div className="overflow-x-auto pb-1">
-        <div className="min-w-max space-y-2">
+        <div className="min-w-max space-y-1.5">
           <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
             {topSegments.map((segment) => {
               const isOpen = openSegmentId === segment.id;
@@ -465,7 +599,7 @@ function PhysicalPairedBay({
               );
             })}
             {topEntries.length < totalColumns && (
-              <div className="rounded-full border border-zinc-800 bg-zinc-900/85 px-1 py-1 text-center text-[8px] uppercase tracking-[0.12em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - topEntries.length} / span ${totalColumns - topEntries.length}` }}>
+              <div className="rounded-md border border-zinc-800 bg-zinc-900/85 px-1 py-1 text-center text-[8px] uppercase tracking-[0.12em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - topEntries.length} / span ${totalColumns - topEntries.length}` }}>
                 open
               </div>
             )}
@@ -481,7 +615,7 @@ function PhysicalPairedBay({
                   <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${top ? `bg-zinc-950/95 ${bayToneClasses[top.tone].socket}` : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}>
                     {top?.number ?? ''}
                   </span>
-                  <span className={`h-3 w-px ${top && bottom ? 'bg-zinc-600' : 'bg-zinc-800'}`} />
+                  <span className={`h-3 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/80' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/80' : 'bg-zinc-700/35') : 'bg-zinc-800'}`} />
                   <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${bottom ? `bg-zinc-950/95 ${bayToneClasses[bottom.tone].socket}` : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}>
                     {bottom?.number ?? ''}
                   </span>
@@ -516,7 +650,7 @@ function PhysicalPairedBay({
               );
             })}
             {bottomEntries.length < totalColumns && (
-              <div className="rounded-full border border-zinc-800 bg-zinc-900/85 px-1 py-1 text-center text-[8px] uppercase tracking-[0.12em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - bottomEntries.length} / span ${totalColumns - bottomEntries.length}` }}>
+              <div className="rounded-md border border-zinc-800 bg-zinc-900/85 px-1 py-1 text-center text-[8px] uppercase tracking-[0.12em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - bottomEntries.length} / span ${totalColumns - bottomEntries.length}` }}>
                 open
               </div>
             )}
@@ -538,7 +672,7 @@ function ActionButton({ children, active = false, tone = 'zinc', className = '',
   };
 
   return (
-    <button {...props} className={`rounded-full border px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] transition ${tones[tone]} ${className}`.trim()}>
+    <button {...props} className={`rounded-md border px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] transition ${tones[tone]} ${className}`.trim()}>
       {children}
     </button>
   );
@@ -546,7 +680,7 @@ function ActionButton({ children, active = false, tone = 'zinc', className = '',
 
 function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Unit details', selected, primaryLabel, primaryActive = selected, onPrimary, onInspect, extraAction }: { pointNumber: number; tone: BayTone; title: string; meta: string; body?: string; detailLabel?: string; selected: boolean; primaryLabel: string; primaryActive?: boolean; onPrimary: () => void; onInspect: () => void; extraAction?: ReactNode }) {
   return (
-    <div className={`rounded-xl border px-3 py-2 ${selected ? 'border-zinc-500 bg-zinc-950/85' : 'border-zinc-800 bg-zinc-950/55'}`}>
+    <div className={`rounded-lg border px-3 py-2 ${selected ? 'border-zinc-500 bg-zinc-950/85' : 'border-zinc-800 bg-zinc-950/55'}`}>
       <div className="flex items-start gap-3">
         <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium ${selected ? bayToneClasses[tone].selected : `bg-zinc-950/95 ${bayToneClasses[tone].socket}`}`}>
           {pointNumber}
@@ -674,8 +808,9 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     onAddParallel(processor);
   };
 
-  const guide = nextStep(selectedMic, selectedPreamp, insertChain);
+  const guide = nextStep(mode, selectedMic, selectedPreamp, insertChain, parallelChain);
   const guideTheme = perspectiveTheme[perspective];
+  const routeChips = liveRouteLabels(selectedMic, selectedPreamp, insertChain, parallelChain);
   const micSegments: BaySegment[] = (() => {
     const nonDynamic = micGroups.filter((g) => g.label !== 'Dynamic');
     const dynamicGroup = micGroups.find((g) => g.label === 'Dynamic');
@@ -1074,27 +1209,42 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         insertChain={insertChain}
         parallelChain={parallelChain}
       />
-      <div className={`mb-4 rounded-[1.6rem] border p-4 ${guideTheme.tray}`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className={`mb-4 rounded-[1rem] border p-4 shadow-[0_16px_45px_rgba(0,0,0,0.22)] ${guideTheme.tray}`}>
+        <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${guideTheme.badge}`}>{guideTheme.label}</span>
+              <span className={`rounded-md border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${guideTheme.badge}`}>{guideTheme.label}</span>
+              <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-zinc-300">{guide.heading}</span>
             </div>
             <p className="max-w-4xl text-sm leading-relaxed text-zinc-200">{guide.body}</p>
-          </div>
-          {analysis && (
-            <div className="min-w-[15rem] rounded-2xl border border-zinc-800 bg-zinc-950/60 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Live electrical read</div>
-              <div className="mt-2 text-sm text-zinc-100">{analysis.bridging_ratio.toFixed(1)}:1 bridging</div>
-              <div className="mt-1 text-xs text-zinc-400">{analysis.loss_db.toFixed(2)} dB loss · {analysis.effective_bw_khz.toFixed(1)} kHz effective bandwidth</div>
+            <div className="flex flex-wrap gap-1.5">
+              {routeChips.length > 0 ? routeChips.map((label) => (
+                <span key={label} className="rounded-md border border-zinc-700 bg-zinc-950/65 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-300">{label}</span>
+              )) : (
+                <span className="rounded-md border border-zinc-800 bg-zinc-950/55 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Default normals waiting</span>
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="space-y-3 rounded-[0.9rem] border border-zinc-800 bg-zinc-950/60 px-3 py-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Patchbay legend</div>
+              <div className="mt-2"><NormalLegend /></div>
+            </div>
+            {analysis && (
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Live electrical read</div>
+                <div className="mt-2 text-sm text-zinc-100">{analysis.bridging_ratio.toFixed(1)}:1 bridging</div>
+                <div className="mt-1 text-xs text-zinc-400">{analysis.loss_db.toFixed(2)} dB loss · {analysis.effective_bw_khz.toFixed(1)} kHz effective bandwidth</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="relative z-[1] space-y-4">
         {patchRows.map((row) => {
-          const active = rowActive(row.id, selectedMic, selectedPreamp, insertChain, parallelChain);
+          const active = rowActive(row.id, mode, selectedMic, selectedPreamp, insertChain, parallelChain);
           const isNext = guide.rowId === row.id;
 
           if (row.id === 'row-api-line-in' || row.id === 'row-insert-return' || row.id === 'row-spatial' || row.id === 'row-fx') {
@@ -1106,8 +1256,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeGroup = openSection ? (micGroups.find((entry) => entry.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') === openSection) ?? null) : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext}>
-                <StackedBayFace rowId="row-mic-ties" topSegments={toPairedSegments(micSegments)} bottomSegments={preampInputSegments} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedPreampPoints} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
+              <RowShell key={row.id} rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext} mode={mode}>
+                <StackedBayFace rowId="row-mic-ties" topSegments={toPairedSegments(micSegments)} bottomSegments={preampInputSegments} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedPreampPoints} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="full-normal" />
 
                 {activeGroup && (
                   <DetailTray title={`${activeGroup.label} tie lines`} caption="Clicking the family header opens only this section. Each mic offers a direct add-to-chain action and a separate inspect action." toneClass="border-rose-900/60 bg-rose-950/18">
@@ -1139,7 +1289,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const preampsInSection = normalizedSection === 'preamp-eq' ? preampEqUnits : standardPreamps;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="1" label="PREAMP OUTPUTS / DAW INPUTS" active={active} isNext={isNext}>
+              <RowShell key={row.id} rowId={row.id} order="1" label="PREAMP OUTPUTS / DAW INPUTS" active={active} isNext={isNext} mode={mode}>
                 <StackedBayFace
                   rowId="row-preamp-in"
                   topSegments={preampOutputSegments}
@@ -1150,6 +1300,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                   onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
                   onBottomSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
                   segmentButtonProps={{ 'data-row-section': row.id }}
+                  normalMode="half-normal"
                 />
 
                 {openSection && preampsInSection.length > 0 && (
@@ -1192,8 +1343,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="2" label="DAW OUTPUTS / CONSOLE INPUTS" active={active} isNext={isNext}>
-                <PhysicalPairedBay topSegments={dawOutputTopSegments} bottomSegments={dawOutputBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+              <RowShell key={row.id} rowId={row.id} order="2" label="DAW OUTPUTS / CONSOLE INPUTS" active={active} isNext={isNext} mode={mode}>
+                <PhysicalPairedBay topSegments={dawOutputTopSegments} bottomSegments={dawOutputBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/60 bg-blue-950/18">
@@ -1209,8 +1360,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="3" label="INSERT SENDS / RETURNS" active={active} isNext={isNext}>
-                <PhysicalPairedBay topSegments={insertSendSegments} bottomSegments={insertReturnSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+              <RowShell key={row.id} rowId={row.id} order="3" label="INSERT SENDS / RETURNS" active={active} isNext={isNext} mode={mode}>
+                <PhysicalPairedBay topSegments={insertSendSegments} bottomSegments={insertReturnSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-violet-900/60 bg-violet-950/18">
@@ -1226,8 +1377,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeGroup = openSection ? (compressorGroups.find((group) => group.id === openSection) ?? null) : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <StackedBayFace rowId="row-dynamics" topSegments={toPairedSegments(compressorSegments)} bottomSegments={toPairedSegments(compressorSegments)} selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
+              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                <StackedBayFace rowId="row-dynamics" topSegments={toPairedSegments(compressorSegments)} bottomSegments={toPairedSegments(compressorSegments)} selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="patch-only" />
 
                 {activeGroup && (
                   <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/60 bg-purple-950/18">
@@ -1281,8 +1432,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                   : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <StackedBayFace rowId="row-eq" topSegments={toPairedSegments(combinedOutboardSegments)} bottomSegments={toPairedSegments(combinedOutboardSegments)} selectedTopPoints={combinedSelectedTop} selectedBottomPoints={combinedSelectedTop} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} />
+              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                <StackedBayFace rowId="row-eq" topSegments={toPairedSegments(combinedOutboardSegments)} bottomSegments={toPairedSegments(combinedOutboardSegments)} selectedTopPoints={combinedSelectedTop} selectedBottomPoints={combinedSelectedTop} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="patch-only" />
 
                 {activeEntry && trayConfig && (
                   <DetailTray title={trayConfig.title} caption={trayConfig.caption} toneClass={trayConfig.toneClass}>
@@ -1341,8 +1492,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/60 bg-amber-950/18">
@@ -1358,8 +1509,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <PhysicalPairedBay topSegments={puebloTopSegments} bottomSegments={puebloBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                <PhysicalPairedBay topSegments={puebloTopSegments} bottomSegments={puebloBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-yellow-900/60 bg-yellow-950/18">
@@ -1375,8 +1526,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext}>
-                <PhysicalPairedBay topSegments={adDawTopSegments} bottomSegments={adDawBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} />
+              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                <PhysicalPairedBay topSegments={adDawTopSegments} bottomSegments={adDawBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="patch-only" />
 
                 {activeInfo && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/60 bg-blue-950/18">

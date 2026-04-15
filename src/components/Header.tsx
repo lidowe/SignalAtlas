@@ -43,10 +43,10 @@ export default function Header({ perspective, mode, onPerspective, onMode, demoS
     <header className={`border-b px-4 py-4 backdrop-blur transition-colors duration-500 ${theme.bar}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Signal Flow Reference</div>
+          <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Virtual Patchbay</div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Signal Atlas</h1>
           <p className="max-w-2xl text-xs leading-relaxed text-zinc-500">
-            Learn how a studio path behaves, why a circuit choice changes the result, and what each routing decision commits to the sound before it reaches the recorder.
+            Move through the room the way the signal does: default normals stay visible, departures stay legible, and every routing choice reveals its consequence before commit.
           </p>
         </div>
 
