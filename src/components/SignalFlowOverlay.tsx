@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { StudioMode, Microphone, Preamp, InsertProcessor, ParallelProcessor } from '../types/studio';
+import type { Perspective, StudioMode, Microphone, Preamp, InsertProcessor, ParallelProcessor } from '../types/studio';
 
 interface Props {
   containerRef: React.RefObject<HTMLDivElement | null>;
+  perspective: Perspective;
   mode: StudioMode;
   selectedMic: Microphone | null;
   selectedPreamp: Preamp | null;
@@ -57,6 +58,7 @@ const MIXING_ROWS = ['row-preamp-out', 'row-insert-send', 'row-api-mix', 'row-pu
 
 export default function SignalFlowOverlay({
   containerRef,
+  perspective,
   mode,
   selectedMic,
   selectedPreamp,
@@ -139,6 +141,12 @@ export default function SignalFlowOverlay({
 
   if (rows.size === 0) return null;
 
+  const lensAccent = perspective === 'musician'
+    ? '#34d399'
+    : perspective === 'engineer'
+      ? '#fb7185'
+      : '#f59e0b';
+
   // ── 1. Always-visible monitor path (bottom rows) ──
   const monitorWaypoints: Array<{ x: number; y: number }> = [];
   for (const rowId of MONITOR_ROWS) {
@@ -211,7 +219,7 @@ export default function SignalFlowOverlay({
     >
       <defs>
         <marker id={arrowId} markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
-          <polygon points="0 0, 6 2.5, 0 5" fill="#f59e0b" fillOpacity="0.7" />
+          <polygon points="0 0, 6 2.5, 0 5" fill={lensAccent} fillOpacity="0.78" />
         </marker>
         <marker id="monitor-arrow" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
           <polygon points="0 0, 6 2.5, 0 5" fill="#a1a1aa" fillOpacity="0.4" />
@@ -237,14 +245,14 @@ export default function SignalFlowOverlay({
       {/* Active selection line — solid, directional, bright */}
       {selectionPathD && (
         <g>
-          <path d={selectionPathD} fill="none" stroke="#f59e0b" strokeWidth={6} strokeOpacity={0.1} strokeLinecap="round" />
-          <path d={selectionPathD} fill="none" stroke="#f59e0b" strokeWidth={2.5} strokeOpacity={0.85} strokeLinecap="round" markerEnd={`url(#${arrowId})`} />
+          <path d={selectionPathD} fill="none" stroke={lensAccent} strokeWidth={6} strokeOpacity={0.12} strokeLinecap="round" />
+          <path d={selectionPathD} fill="none" stroke={lensAccent} strokeWidth={2.5} strokeOpacity={0.92} strokeLinecap="round" markerEnd={`url(#${arrowId})`} />
         </g>
       )}
 
       {/* Selection point dots */}
       {selectionWaypoints.map((pt, i) => (
-        <circle key={`sel-${i}`} cx={pt.x} cy={pt.y} r={4} fill="#f59e0b" fillOpacity={0.9} stroke="#f59e0b" strokeWidth={1} strokeOpacity={0.3} />
+        <circle key={`sel-${i}`} cx={pt.x} cy={pt.y} r={4} fill={lensAccent} fillOpacity={0.9} stroke={lensAccent} strokeWidth={1} strokeOpacity={0.3} />
       ))}
     </svg>
   );

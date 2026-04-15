@@ -191,14 +191,20 @@ function liveRouteLabels(selectedMic: Microphone | null, selectedPreamp: Preamp 
   return labels.slice(0, 6);
 }
 
-function NormalLegend() {
+function routeStateLabel(mode: StudioMode, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): string {
+  if (parallelChain.length > 0) return 'Parallel return live';
+  if (insertChain.length > 0) return mode === 'mixing' ? 'Bus route customized' : 'Capture route customized';
+  return mode === 'mixing' ? 'Console defaults intact' : 'Capture defaults intact';
+}
+
+function SectionMarker({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {(['full-normal', 'half-normal', 'patch-only'] as BayNormalMode[]).map((mode) => (
-        <span key={mode} className={`rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${normalModeMeta[mode].badge}`}>
-          {normalModeMeta[mode].label}
-        </span>
-      ))}
+    <div className="mb-2 px-0.5">
+      <div className="flex items-center gap-3">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-400">{title}</div>
+        <div className="h-px flex-1 bg-zinc-800" />
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{subtitle}</p>
     </div>
   );
 }
@@ -383,7 +389,7 @@ function DetailTray({ title, caption, children, toneClass }: { title: string; ca
   return (
     <div className={`mt-2 rounded-[0.9rem] border p-2.5 md:p-3 ${toneClass}`}>
       <div className="mb-2">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Detail tray</div>
+        <div className="hidden text-[10px] uppercase tracking-[0.22em] text-zinc-500 sm:block">Focused view</div>
         <div className="mt-1 text-sm font-medium text-zinc-100">{title}</div>
         <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{caption}</p>
       </div>
@@ -498,7 +504,7 @@ function StackedBayFace({
         return (
           <div key={`${entry?.segmentId ?? 'open'}-${index}`} className="flex justify-center">
             <span
-              className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${entry ? (selected ? bayToneClasses[entry.tone].selected : `bg-zinc-950/95 ${bayToneClasses[entry.tone].socket}`) : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border text-[9px] font-medium sm:h-7 sm:w-7 ${entry ? (selected ? bayToneClasses[entry.tone].selected : `bg-zinc-950/95 ${bayToneClasses[entry.tone].socket}`) : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}
               {...(selected && entry?.number != null ? { 'data-selected-point': `${rowId}-${position}-${entry.number}` } : {})}
             >
               {entry?.number ?? ''}
@@ -1203,6 +1209,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-4 py-4">
       <SignalFlowOverlay
         containerRef={scrollContainerRef}
+        perspective={perspective}
         mode={mode}
         selectedMic={selectedMic}
         selectedPreamp={selectedPreamp}
@@ -1210,31 +1217,31 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         parallelChain={parallelChain}
       />
       <div className={`mb-4 rounded-[1rem] border p-4 shadow-[0_16px_45px_rgba(0,0,0,0.22)] ${guideTheme.tray}`}>
-        <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+        <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-md border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${guideTheme.badge}`}>{guideTheme.label}</span>
               <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-zinc-300">{guide.heading}</span>
+              <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-zinc-400">{routeStateLabel(mode, insertChain, parallelChain)}</span>
             </div>
             <p className="max-w-4xl text-sm leading-relaxed text-zinc-200">{guide.body}</p>
             <div className="flex flex-wrap gap-1.5">
               {routeChips.length > 0 ? routeChips.map((label) => (
                 <span key={label} className="rounded-md border border-zinc-700 bg-zinc-950/65 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-300">{label}</span>
               )) : (
-                <span className="rounded-md border border-zinc-800 bg-zinc-950/55 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Default normals waiting</span>
+                <span className="rounded-md border border-zinc-800 bg-zinc-950/55 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Default route standing by</span>
               )}
             </div>
           </div>
 
-          <div className="space-y-3 rounded-[0.9rem] border border-zinc-800 bg-zinc-950/60 px-3 py-3">
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Patchbay legend</div>
-              <div className="mt-2"><NormalLegend /></div>
-            </div>
+          <div className="space-y-2 rounded-[0.9rem] border border-zinc-800 bg-zinc-950/60 px-3 py-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Stage</div>
+            <div className="text-sm text-zinc-100">{mode === 'mixing' ? 'Summing and print path' : 'Source to capture path'}</div>
+            <div className="text-[11px] leading-relaxed text-zinc-500">Solid straps mean direct normals. Dashed breaks indicate a half-normal field that can be tapped or redirected.</div>
             {analysis && (
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Live electrical read</div>
-                <div className="mt-2 text-sm text-zinc-100">{analysis.bridging_ratio.toFixed(1)}:1 bridging</div>
+              <div className="pt-1">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Live read</div>
+                <div className="mt-1 text-sm text-zinc-100">{analysis.bridging_ratio.toFixed(1)}:1 bridging</div>
                 <div className="mt-1 text-xs text-zinc-400">{analysis.loss_db.toFixed(2)} dB loss · {analysis.effective_bw_khz.toFixed(1)} kHz effective bandwidth</div>
               </div>
             )}
@@ -1256,30 +1263,33 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeGroup = openSection ? (micGroups.find((entry) => entry.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') === openSection) ?? null) : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext} mode={mode}>
-                <StackedBayFace rowId="row-mic-ties" topSegments={toPairedSegments(micSegments)} bottomSegments={preampInputSegments} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedPreampPoints} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="full-normal" />
+              <div key={row.id} className="space-y-2">
+                <SectionMarker title="Source and capture" subtitle="The studio is already normalled to record. Start here, then decide whether the route stays clean or becomes a deliberate chain." />
+                <RowShell rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext} mode={mode}>
+                  <StackedBayFace rowId="row-mic-ties" topSegments={toPairedSegments(micSegments)} bottomSegments={preampInputSegments} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedPreampPoints} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="full-normal" />
 
-                {activeGroup && (
-                  <DetailTray title={`${activeGroup.label} tie lines`} caption="Clicking the family header opens only this section. Each mic offers a direct add-to-chain action and a separate inspect action." toneClass="border-rose-900/60 bg-rose-950/18">
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                      {activeGroup.mics.map((mic, index) => (
-                        <CompactChoice
-                          key={mic.id}
-                          pointNumber={micStartPoint(activeGroup.label) + index}
-                          tone={activeGroup.tone}
-                          title={mic.name}
-                          meta={compactMeta([mic.type, `${mic.qty}x`, mic.patterns.join('/')])}
-                          selected={selectedMic?.id === mic.id}
-                          primaryLabel="Add to chain"
-                          onPrimary={() => onSelectMic(mic)}
-                          detailLabel="Mic details"
-                          onInspect={() => onInspect(mic.id)}
-                        />
-                      ))}
-                    </div>
-                  </DetailTray>
-                )}
-              </RowShell>
+                  {activeGroup && (
+                    <DetailTray title={`${activeGroup.label} tie lines`} caption="These sources are live at the bay. Choose one for the route or open it for a deeper sonic read." toneClass="border-rose-900/60 bg-rose-950/18">
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {activeGroup.mics.map((mic, index) => (
+                          <CompactChoice
+                            key={mic.id}
+                            pointNumber={micStartPoint(activeGroup.label) + index}
+                            tone={activeGroup.tone}
+                            title={mic.name}
+                            meta={compactMeta([mic.type, `${mic.qty}x`, mic.patterns.join('/')])}
+                            selected={selectedMic?.id === mic.id}
+                            primaryLabel="Add to chain"
+                            onPrimary={() => onSelectMic(mic)}
+                            detailLabel="Mic details"
+                            onInspect={() => onInspect(mic.id)}
+                          />
+                        ))}
+                      </div>
+                    </DetailTray>
+                  )}
+                </RowShell>
+              </div>
             );
           }
 
@@ -1304,7 +1314,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                 />
 
                 {openSection && preampsInSection.length > 0 && (
-                  <DetailTray title={normalizedSection === 'preamp-eq' ? 'Preamp / EQ units' : 'Standalone preamps'} caption={normalizedSection === 'preamp-eq' ? 'These units can serve as the first gain stage and can also donate their EQ section later as another analog stage.' : 'These are the direct first-stage choices. The selected preamp row stays highlighted after you commit one.'} toneClass="border-blue-900/60 bg-blue-950/18">
+                  <DetailTray title={normalizedSection === 'preamp-eq' ? 'Preamp / EQ units' : 'Standalone preamps'} caption={normalizedSection === 'preamp-eq' ? 'These channels can anchor the first gain stage and later contribute another shaped analog pass.' : 'These are the core front-end choices that define how the source arrives at the recorder.'} toneClass="border-blue-900/60 bg-blue-950/18">
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                       {preampsInSection.map((preamp) => (
                         <CompactChoice
@@ -1377,39 +1387,50 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeGroup = openSection ? (compressorGroups.find((group) => group.id === openSection) ?? null) : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
-                <StackedBayFace rowId="row-dynamics" topSegments={toPairedSegments(compressorSegments)} bottomSegments={toPairedSegments(compressorSegments)} selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="patch-only" />
+              <div key={row.id} className="space-y-2">
+                <SectionMarker title="Outboard field" subtitle="Dynamics, equalizers, and returns live here. Nothing needs to be patched unless the sound genuinely benefits from it." />
+                <RowShell rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                  <StackedBayFace
+                    rowId="row-dynamics"
+                    topSegments={toPairedSegments(compressorSegments)}
+                    bottomSegments={toPairedSegments(compressorSegments)}
+                    selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))}
+                    selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))}
+                    openTopSegmentId={openSection}
+                    onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
+                    segmentButtonProps={{ 'data-row-section': row.id }}
+                    normalMode="patch-only"
+                  />
 
-                {activeGroup && (
-                  <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/60 bg-purple-950/18">
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                      {activeGroup.items.map((compressor) => (
-                        (() => {
+                  {activeGroup && (
+                    <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/60 bg-purple-950/18">
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {activeGroup.items.map((compressor) => {
                           const insertSelected = insertChain.some((processor) => processor.type === 'compressor' && processor.item.id === compressor.id);
                           const parallelSelected = parallelChain.some((processor) => processor.type === 'compressor' && processor.item.id === compressor.id);
 
                           return (
-                        <CompactChoice
-                          key={compressor.id}
-                          pointNumber={pointNumberForGroupedItem(compressorGroups, compressor.id)}
-                          tone="purple"
-                          title={compressor.name}
-                          meta={compactMeta([compressor.topology, compressor.ratios, compressor.detection])}
-                          selected={insertSelected || parallelSelected}
-                          primaryLabel={insertSelected ? 'Remove from chain' : 'Patch into chain'}
-                          primaryActive={insertSelected}
-                          onPrimary={() => toggleInsert({ type: 'compressor', item: compressor })}
-                          detailLabel="Compressor details"
-                          onInspect={() => onInspect(compressor.id)}
-                          extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => toggleParallel({ type: 'compressor', item: compressor })}>{parallelSelected ? 'Remove branch' : 'Blend return'}</ActionButton>}
-                        />
+                            <CompactChoice
+                              key={compressor.id}
+                              pointNumber={pointNumberForGroupedItem(compressorGroups, compressor.id)}
+                              tone="purple"
+                              title={compressor.name}
+                              meta={compactMeta([compressor.topology, compressor.ratios, compressor.detection])}
+                              selected={insertSelected || parallelSelected}
+                              primaryLabel={insertSelected ? 'Remove from chain' : 'Patch into chain'}
+                              primaryActive={insertSelected}
+                              onPrimary={() => toggleInsert({ type: 'compressor', item: compressor })}
+                              detailLabel="Compressor details"
+                              onInspect={() => onInspect(compressor.id)}
+                              extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => toggleParallel({ type: 'compressor', item: compressor })}>{parallelSelected ? 'Remove branch' : 'Blend return'}</ActionButton>}
+                            />
                           );
-                        })()
-                      ))}
-                    </div>
-                  </DetailTray>
-                )}
-              </RowShell>
+                        })}
+                      </div>
+                    </DetailTray>
+                  )}
+                </RowShell>
+              </div>
             );
           }
 
@@ -1492,15 +1513,18 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
             return (
-              <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
-                <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
+              <div key={row.id} className="space-y-2">
+                <SectionMarker title="Summing and print" subtitle="This is where the route stops being a collection of channels and becomes a mix, a monitor feed, or a committed print." />
+                <RowShell rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
+                  <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
-                {activeInfo && (
-                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/60 bg-amber-950/18">
-                    <div />
-                  </DetailTray>
-                )}
-              </RowShell>
+                  {activeInfo && (
+                    <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/60 bg-amber-950/18">
+                      <div />
+                    </DetailTray>
+                  )}
+                </RowShell>
+              </div>
             );
           }
 

@@ -63,7 +63,7 @@ function App() {
   const theme = shellTheme[state.perspective];
 
   return (
-    <div className={`h-screen h-[100svh] flex flex-col text-zinc-200 overflow-hidden transition-colors duration-500 ${theme.frame}`}>
+    <div className={`studio-atlas-shell h-screen h-[100svh] flex flex-col overflow-hidden text-zinc-200 transition-colors duration-500 ${theme.frame}`}>
       <Header
         perspective={state.perspective}
         mode={state.mode}
@@ -130,7 +130,11 @@ function App() {
               className="fixed inset-0 z-20 bg-zinc-950/70 backdrop-blur-sm lg:hidden"
             />
 
-            <aside className="fixed inset-x-0 bottom-0 top-20 z-30 overflow-y-auto rounded-t-2xl border border-zinc-800 bg-zinc-950/96 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:bg-zinc-950/72 lg:shadow-none lg:backdrop-blur shrink-0">
+            <aside className="fixed inset-x-0 bottom-0 top-24 z-30 overflow-y-auto rounded-t-2xl border border-zinc-800 bg-zinc-950/96 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:bg-zinc-950/72 lg:shadow-none lg:backdrop-blur shrink-0">
+              <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/92 px-4 py-2 backdrop-blur lg:hidden">
+                <div className="mx-auto mb-2 h-1 w-12 rounded-full bg-zinc-700" />
+                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Focused gear view</div>
+              </div>
               <Suspense fallback={<div className="p-4 text-sm text-zinc-500">Loading inspector…</div>}>
                 <ComponentInspector
                   perspective={state.perspective}

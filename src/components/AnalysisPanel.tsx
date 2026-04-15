@@ -237,7 +237,7 @@ function directionalOverview(
 export default function AnalysisPanel({
   perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
 }: Props) {
-  const [showRouteNotes, setShowRouteNotes] = useState(true);
+  const [showRouteNotes, setShowRouteNotes] = useState(false);
   const [showNarrativeDetails, setShowNarrativeDetails] = useState(false);
   const hasRouteNotes =
     routeSummary.deviations.length > 0 ||
@@ -249,10 +249,10 @@ export default function AnalysisPanel({
     if (!overview) {
       // Nothing selected at all — show the monitor path as starting context
       const prompt = mode === 'mixing'
-        ? 'Choose a DAW output channel to begin building a mix path.'
+        ? 'The summing and print path is standing by below.'
         : 'Choose a microphone to begin building a capture path.';
       return (
-        <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-2.5 backdrop-blur">
+        <div className="border-t border-zinc-800 bg-zinc-950/72 px-3 py-2.5 sm:px-4 backdrop-blur">
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 space-y-1.5">
             <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Listening through</div>
             <div className="text-[11px] text-zinc-400 leading-relaxed">
@@ -265,7 +265,7 @@ export default function AnalysisPanel({
     }
 
     return (
-      <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-2 backdrop-blur">
+      <div className="border-t border-zinc-800 bg-zinc-950/72 px-3 py-2 sm:px-4 backdrop-blur">
         <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
           <div className="min-w-0 space-y-1">
             <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Building route</div>
@@ -316,12 +316,12 @@ export default function AnalysisPanel({
   const parallelPathSummary = parallelSummary(parallelChain);
 
   return (
-    <div className="border-t border-zinc-800 bg-zinc-950/72 px-4 py-3 space-y-2.5 max-h-64 overflow-y-auto backdrop-blur">
+    <div className="border-t border-zinc-800 bg-zinc-950/72 px-3 py-3 space-y-2.5 max-h-[46vh] overflow-y-auto backdrop-blur sm:max-h-64 sm:px-4">
       {/* Chain header + clear */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="min-w-0 flex items-center gap-2 overflow-hidden">
           <div className={`text-[10px] font-medium uppercase tracking-[0.22em] shrink-0 ${textAccents[perspective]}`}>{perspectiveLabels[perspective]}</div>
-          <div className="text-[11px] text-zinc-500 font-mono truncate">{chainSummary(selectedMic, selectedPreamp, insertChain)}</div>
+          <div className="hidden truncate text-[11px] font-mono text-zinc-500 sm:block">{chainSummary(selectedMic, selectedPreamp, insertChain)}</div>
         </div>
         <button onClick={onClearChain} className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-full px-2.5 py-1 shrink-0">
           Clear
