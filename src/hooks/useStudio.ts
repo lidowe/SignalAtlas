@@ -61,8 +61,8 @@ function buildMixPathModel(trackNumber: number, destination?: MixPathDestination
         sourceLabel,
         routeLabel: 'API Mix B',
         destination: resolvedDestination,
-        sonicIntent: 'Keeps the track on the secondary bus for alternate balance, overflow, or parallel stem handling.',
-        technicalNote: 'Routes through the second API program bus, typically onward to Pueblo Bank D and the cleaner print branch.',
+        sonicIntent: 'Keeps the track on a separate API bus so it can stay punchy and dense without forcing the whole mix into the same center-weighted move.',
+        technicalNote: 'This still uses the API 2510/2520 amplifier path and bus output iron, but on an independent stereo lane. That is why it keeps the API midrange firmness while preserving separate balance control.',
         printTarget: 'Pueblo Bank D → AD+ input B',
         monitorTarget: 'D-Box+ AES monitor path',
       };
@@ -73,8 +73,8 @@ function buildMixPathModel(trackNumber: number, destination?: MixPathDestination
         sourceLabel,
         routeLabel: 'Tonelux OTB tributary',
         destination: resolvedDestination,
-        sonicIntent: 'Uses the OTB overflow path to add separate summing color before the signal rejoins the broader mix.',
-        technicalNote: 'Best fit for outputs above the first 16 channels; transformer color and bus reinjection stay available.',
+        sonicIntent: 'Pushes the track through an extra analog color lane first, so it comes back thicker, slightly softer on transients, and more obviously glued before it rejoins the mix.',
+        technicalNote: 'Aurora outputs 17–24 feed the OTB discrete summing stage and TX-100 transformer, then re-enter the API path. That extra iron stage changes harmonic density, low-mid weight, and HF phase behavior more than a direct console route.',
         printTarget: 'OTB tributary → API external / insert return path',
         monitorTarget: 'D-Box+ monitor after the summed bus',
       };
@@ -85,8 +85,8 @@ function buildMixPathModel(trackNumber: number, destination?: MixPathDestination
         sourceLabel,
         routeLabel: 'Pueblo Bank A',
         destination: resolvedDestination,
-        sonicIntent: 'Opens an independent, cleaner parallel summing lane that can stay separate from the main print path.',
-        technicalNote: 'Feeds an open Pueblo bank directly; useful when the user wants independent routing rather than immediate bus reinsertion.',
+        sonicIntent: 'Keeps the track cleaner, wider, and more separated by opening a dedicated lane outside the denser API bus path.',
+        technicalNote: 'Pueblo is the lower-color active summing option here: wider bandwidth, very low THD, and no immediate API transformer reinsertion. That usually reads as more transient truth and less bus glue.',
         printTarget: 'Independent Pueblo output, not the default print tail',
         monitorTarget: 'D-Box+ via the chosen monitor source',
       };
@@ -97,8 +97,8 @@ function buildMixPathModel(trackNumber: number, destination?: MixPathDestination
         sourceLabel,
         routeLabel: 'Pueblo Bank B',
         destination: resolvedDestination,
-        sonicIntent: 'Builds a second open Pueblo path for a separate stem or branch that can later be compared or cascaded.',
-        technicalNote: 'Preserves an independent active summing lane and keeps the route outside the default API bus print path.',
+        sonicIntent: 'Builds another open, lower-color branch so a stem can stay more explicit and less iron-shaped until you decide what to do with it.',
+        technicalNote: 'Like Bank A, this stays on Pueblo’s active summing network rather than the API bus amplifiers and transformers. The audible result is usually more separation, less density, and a freer later print decision.',
         printTarget: 'Independent Pueblo output, manually directed onward',
         monitorTarget: 'D-Box+ via the chosen monitor source',
       };
@@ -110,17 +110,12 @@ function buildMixPathModel(trackNumber: number, destination?: MixPathDestination
         sourceLabel,
         routeLabel: 'API Mix A',
         destination: 'api-mix-a',
-        sonicIntent: 'Keeps the track on the main console path for the punchier, more centered API bus result.',
-        technicalNote: 'Uses the primary 16-channel summing route and heads toward the default print path with about a 4 dB API-to-AD+ headroom gap.',
+        sonicIntent: 'Keeps the track in the main API center lane, where the mix tends to feel more assertive, glued, and mid-forward.',
+        technicalNote: 'This route hits the API summing amplifiers and output iron before the print tail. That bus architecture is why Mix A feels denser and more forceful than the cleaner Pueblo branches, and why gain staging matters into the AD+.',
         printTarget: 'Pueblo Bank C / API print path → AD+ input A',
         monitorTarget: 'D-Box+ AES monitor path',
       };
   }
-}
-
-function buildMixPaths(trackCount: number): MixPathModel[] {
-  const clamped = Math.max(0, Math.min(24, trackCount));
-  return Array.from({ length: clamped }, (_, index) => buildMixPathModel(index + 1));
 }
 
 export interface StudioState {

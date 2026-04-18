@@ -9,6 +9,7 @@ import type {
   Preamp,
   RouteSummaryModel,
   StudioMode,
+  MixPathModel,
 } from '../types/studio';
 
 interface Props {
@@ -21,6 +22,8 @@ interface Props {
   selectedPreamp: Preamp | null;
   insertChain: InsertProcessor[];
   parallelChain: ParallelProcessor[];
+  mixSessionTrackCount: number;
+  mixPaths: MixPathModel[];
   onClearChain: () => void;
 }
 
@@ -229,7 +232,7 @@ function directionalOverview(
 }
 
 export default function AnalysisPanel({
-  perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
+  perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, mixSessionTrackCount, mixPaths, onClearChain,
 }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -240,6 +243,53 @@ export default function AnalysisPanel({
     routeSummary.validation_issues.length > 0 ||
     routeSummary.available_next_actions.length > 0;
   const overview = directionalOverview(selectedMic, selectedPreamp, insertChain, parallelChain);
+  const hasMixSession = mode === 'mixing' && mixPaths.length > 0;
+
+  if ((!analysis || !selectedMic || !selectedPreamp) && hasMixSession) {
+    return (
+      <div className="mat-brushed-dark rounded-[3px] border border-zinc-800/20">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left"
+        >
+          <span className="text-silkscreen-faint text-[8px]">Mix session</span>
+          <span className="min-w-0 flex-1 truncate text-[10px] text-zinc-400">{routeSummary.headline}</span>
+        </button>
+        {expanded && (
+          <div className="border-t border-zinc-800/20 px-3 py-2 space-y-2">
+            <p className="text-[11px] leading-relaxed text-zinc-300">{perspectiveInsight.summary}</p>
+            <div className="text-[11px] text-zinc-500">{routeSummary.viability_flag.reason}</div>
+            <div className="text-[10px] text-zinc-500">{mixSessionTrackCount} active analog route{mixSessionTrackCount === 1 ? '' : 's'} instantiated from the DAW.</div>
+            {routeSummary.active_path.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
+                {routeSummary.active_path.map((stage, index) => (
+                  <span key={stage.id} className="contents">
+                    {index > 0 && <span className="text-zinc-600">→</span>}
+                    <span className="rounded-[2px] border border-zinc-800/20 mat-recess px-1.5 py-0.5">{stage.label}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {routeSummary.deviations.length > 0 && (
+              <div className="space-y-1">
+                {routeSummary.deviations.map((deviation) => (
+                  <p key={deviation} className="text-[11px] text-zinc-500">{deviation}</p>
+                ))}
+              </div>
+            )}
+            {routeSummary.available_next_actions.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {routeSummary.available_next_actions.slice(0, 3).map((action) => (
+                  <span key={action} className="text-[9px] px-1.5 py-0.5 rounded-[2px] border border-zinc-800/20 mat-recess text-zinc-400">{action}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (!analysis || !selectedMic || !selectedPreamp) {
     if (!overview) {

@@ -882,6 +882,14 @@ function MixSessionPlanner({
     'pueblo-bank-b': 'sum-pueblo-hj482',
   };
 
+  const destinationSummary = [
+    { label: 'Mix A', count: paths.filter((path) => path.destination === 'api-mix-a').length, className: 'border-amber-800/30 text-amber-300/80' },
+    { label: 'Mix B', count: paths.filter((path) => path.destination === 'api-mix-b').length, className: 'border-blue-800/30 text-blue-300/80' },
+    { label: 'OTB', count: paths.filter((path) => path.destination === 'otb').length, className: 'border-teal-800/30 text-teal-300/80' },
+    { label: 'Pueblo A', count: paths.filter((path) => path.destination === 'pueblo-bank-a').length, className: 'border-cyan-800/30 text-cyan-300/80' },
+    { label: 'Pueblo B', count: paths.filter((path) => path.destination === 'pueblo-bank-b').length, className: 'border-violet-800/30 text-violet-300/80' },
+  ].filter((entry) => entry.count > 0);
+
   return (
     <div className="relative z-[1] mb-4 space-y-3 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
       <div className="space-y-1">
@@ -910,6 +918,16 @@ function MixSessionPlanner({
         <div className="text-[10px] text-zinc-500">24 direct analog outputs are available before alternate routing logic takes over.</div>
       </div>
 
+      {destinationSummary.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {destinationSummary.map((entry) => (
+            <span key={entry.label} className={`mat-recess rounded-[2px] border px-2 py-0.5 text-[9px] ${entry.className}`}>
+              {entry.label} {entry.count}
+            </span>
+          ))}
+        </div>
+      )}
+
       {paths.length > 0 && (
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
           {paths.map((path) => (
@@ -922,7 +940,9 @@ function MixSessionPlanner({
                 <ActionButton type="button" onClick={() => onInspect(inspectMap[path.destination])}>Inspect</ActionButton>
               </div>
               <div className="mt-1 text-[10px] text-zinc-400">{path.sourceLabel}</div>
+              <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-500">Sonic result</div>
               <p className="mt-1 text-[11px] leading-relaxed text-zinc-300/85">{path.sonicIntent}</p>
+              <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-500">Technical cause</div>
               <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">{path.technicalNote}</p>
               <div className="mt-2 space-y-1 text-[10px] text-zinc-400">
                 <div><span className="text-zinc-500">Print:</span> {path.printTarget}</div>
@@ -1117,6 +1137,25 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
     .filter(([, route]) => route.targetSectionId === sectionId)
     .map(([sourceKey, route]) => ({ sourceKey, route }));
 
+  const mixSourcesForSection = (sectionId: string) => {
+    const sectionMap: Partial<Record<string, MixPathDestinationId[]>> = {
+      'api-mix-a-out': ['api-mix-a'],
+      'api-mix-b-out': ['api-mix-b'],
+      'api-master-out': ['api-mix-a', 'api-mix-b', 'otb'],
+      'otb16-line-inputs': ['otb'],
+      'pueblo-bank-a': ['pueblo-bank-a'],
+      'pueblo-bank-b': ['pueblo-bank-b'],
+      'pueblo-bank-d': ['api-mix-b'],
+      'adplus-input-a': ['api-mix-a', 'otb'],
+      'adplus-input-b': ['api-mix-b'],
+    };
+
+    const destinations = sectionMap[sectionId] ?? [];
+    return mixPaths
+      .filter((path) => destinations.includes(path.destination))
+      .map((path) => `Track ${path.trackNumber} • ${path.routeLabel}`);
+  };
+
   const incomingSourcesForSection = (sectionId: string) => {
     const matches = ['api-mix-a-out', 'api-mix-b-out', 'api-master-out'].includes(sectionId)
       ? Object.entries(outputRoutes)
@@ -1124,10 +1163,12 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
         .map(([sourceKey, route]) => ({ sourceKey, route }))
       : routesFeedingSection(sectionId);
 
-    return matches.map(({ sourceKey }) => {
+    const routedSources = matches.map(({ sourceKey }) => {
       const [sourceRowId, sourceSectionId] = sourceKey.split(':');
       return describeSource(sourceRowId, sourceSectionId);
     });
+
+    return Array.from(new Set([...routedSources, ...mixSourcesForSection(sectionId)]));
   };
 
   const renderParallelRouteTray = (sourceRowId: string, sectionId: string) => (
@@ -1557,6 +1598,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
         selectedPreamp={selectedPreamp}
         insertChain={insertChain}
         parallelChain={parallelChain}
+        mixPaths={mixPaths}
       />
 
       {mode === 'mixing' && (
@@ -2080,6 +2122,8 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
           selectedPreamp={selectedPreamp}
           insertChain={insertChain}
           parallelChain={parallelChain}
+          mixSessionTrackCount={mixSessionTrackCount}
+          mixPaths={mixPaths}
           onClearChain={onClearChain}
         />
       </div>

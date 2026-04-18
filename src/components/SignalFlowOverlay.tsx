@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Perspective, StudioMode, Microphone, Preamp, InsertProcessor, ParallelProcessor } from '../types/studio';
+import type { Perspective, StudioMode, Microphone, Preamp, InsertProcessor, ParallelProcessor, MixPathModel, MixPathDestinationId } from '../types/studio';
 
 interface Props {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -9,6 +9,7 @@ interface Props {
   selectedPreamp: Preamp | null;
   insertChain: InsertProcessor[];
   parallelChain: ParallelProcessor[];
+  mixPaths: MixPathModel[];
 }
 
 interface RowRect {
@@ -65,11 +66,38 @@ const MONITOR_ROWS = ['row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'];
 const TRACKING_ROWS = ['row-mic-ties', 'row-preamp-in', 'row-dynamics', 'row-eq', 'row-ad-daw'];
 const MIXING_ROWS = ['row-preamp-out', 'row-insert-send', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'];
 
+// ── Destination colors for mix-path lines ──
+const DESTINATION_COLORS: Record<MixPathDestinationId, string> = {
+  'api-mix-a': '#34d399',   // emerald — primary API bus
+  'api-mix-b': '#60a5fa',   // blue — secondary API bus
+  'otb': '#fbbf24',         // amber — OTB summing
+  'pueblo-bank-a': '#c084fc', // violet — Pueblo A
+  'pueblo-bank-b': '#f472b6', // pink — Pueblo B
+};
+
+// Rows each destination flows through (only rows visible in the patchbay)
+const DESTINATION_FLOW: Record<MixPathDestinationId, string[]> = {
+  'api-mix-a': ['row-preamp-out', 'row-insert-send', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'],
+  'api-mix-b': ['row-preamp-out', 'row-insert-send', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'],
+  'otb': ['row-preamp-out', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'],
+  'pueblo-bank-a': ['row-preamp-out', 'row-pueblo-in', 'row-ad-daw'],
+  'pueblo-bank-b': ['row-preamp-out', 'row-pueblo-in', 'row-ad-daw'],
+};
+
+const DESTINATION_LABELS: Record<MixPathDestinationId, string> = {
+  'api-mix-a': 'Mix A',
+  'api-mix-b': 'Mix B',
+  'otb': 'OTB',
+  'pueblo-bank-a': 'Pueblo A',
+  'pueblo-bank-b': 'Pueblo B',
+};
+
 // ── Segment: a path fragment with its own signal level + lane count ──
 interface PathSegment {
   d: string;
   level: SignalLevel;
   stereo: boolean;
+  colorOverride?: string;
 }
 
 export default function SignalFlowOverlay({
@@ -80,6 +108,7 @@ export default function SignalFlowOverlay({
   selectedPreamp,
   insertChain,
   parallelChain,
+  mixPaths,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [rows, setRows] = useState<Map<string, RowRect>>(new Map());
@@ -153,7 +182,7 @@ export default function SignalFlowOverlay({
 
   useEffect(() => {
     requestAnimationFrame(measure);
-  }, [selectedMic, selectedPreamp, insertChain.length, parallelChain.length, mode, measure]);
+  }, [selectedMic, selectedPreamp, insertChain.length, parallelChain.length, mode, mixPaths.length, measure]);
 
   if (rows.size === 0) return null;
 
@@ -177,10 +206,45 @@ export default function SignalFlowOverlay({
 
   // ── 2. Active selection segments (level-colored, mono/stereo aware) ──
   const segments: PathSegment[] = [];
-  const selectionDots: Array<{ x: number; y: number; level: SignalLevel }> = [];
+  const selectionDots: Array<{ x: number; y: number; level: SignalLevel; colorOverride?: string }> = [];
 
-  if (mode === 'mixing') {
-    // Mixing mode: full stereo line-level path through row centers
+  // ── Mix-path destination labels (rendered as SVG text) ──
+  const destLabels: Array<{ x: number; y: number; label: string; color: string; count: number }> = [];
+
+  if (mode === 'mixing' && mixPaths.length > 0) {
+    // Group tracks by destination
+    const destCounts = new Map<MixPathDestinationId, number>();
+    for (const p of mixPaths) {
+      destCounts.set(p.destination, (destCounts.get(p.destination) ?? 0) + 1);
+    }
+    const activeDestinations = [...destCounts.keys()];
+    const totalDests = activeDestinations.length;
+
+    activeDestinations.forEach((dest, i) => {
+      const flowRows = DESTINATION_FLOW[dest];
+      const offsetX = totalDests <= 1 ? 0 : (i - (totalDests - 1) / 2) * 14;
+      const color = DESTINATION_COLORS[dest];
+      const count = destCounts.get(dest) ?? 0;
+
+      const pts: Array<{ x: number; y: number }> = [];
+      for (const rowId of flowRows) {
+        const row = rows.get(rowId);
+        if (row) pts.push({ x: row.centerX + offsetX, y: row.centerY });
+      }
+
+      const d = buildBezier(pts);
+      if (d) segments.push({ d, level: 'line', stereo: true, colorOverride: color });
+
+      // Add dots at each waypoint
+      pts.forEach(pt => selectionDots.push({ ...pt, level: 'line', colorOverride: color }));
+
+      // Place a label near the first row of this destination
+      if (pts.length > 0) {
+        destLabels.push({ x: pts[0].x, y: pts[0].y - 10, label: DESTINATION_LABELS[dest], color, count });
+      }
+    });
+  } else if (mode === 'mixing') {
+    // Fallback: generic mixing line when no paths configured
     const mixPts: Array<{ x: number; y: number }> = [];
     MIXING_ROWS.forEach((rowId) => {
       const row = rows.get(rowId);
@@ -370,7 +434,7 @@ export default function SignalFlowOverlay({
 
       {/* Active selection segments — level-colored, mono or stereo */}
       {segments.map((seg, i) => {
-        const color = levelColor(seg.level);
+        const color = seg.colorOverride ?? levelColor(seg.level);
         const markerId = seg.level === 'mic' ? 'mic-arrow' : arrowId;
         const isLast = i === segments.length - 1;
 
@@ -390,11 +454,21 @@ export default function SignalFlowOverlay({
 
       {/* Selection point dots */}
       {selectionDots.map((pt, i) => {
-        const color = levelColor(pt.level);
+        const color = pt.colorOverride ?? levelColor(pt.level);
         return (
           <circle key={`dot-${i}`} cx={pt.x} cy={pt.y} r={4} fill={color} fillOpacity={0.9} stroke={color} strokeWidth={1} strokeOpacity={0.3} />
         );
       })}
+
+      {/* Destination labels — small badges near the top of each destination line */}
+      {destLabels.map((dl, i) => (
+        <g key={`dest-label-${i}`}>
+          <rect x={dl.x - 20} y={dl.y - 8} width={40} height={16} rx={4} fill="#18181b" fillOpacity={0.85} stroke={dl.color} strokeWidth={0.5} strokeOpacity={0.4} />
+          <text x={dl.x} y={dl.y + 3} textAnchor="middle" fill={dl.color} fillOpacity={0.9} fontSize={8} fontFamily="monospace" fontWeight={600}>
+            {dl.label} ×{dl.count}
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }

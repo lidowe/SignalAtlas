@@ -137,7 +137,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-api-a',
       label: `API Mix A (${counts.apiMixA})`,
       type: 'summing',
-      detail: 'Primary punch-forward console bus',
+      detail: 'API 2520 bus amp + output iron — denser mids, firmer punch, more glue',
     });
   }
 
@@ -146,7 +146,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-api-b',
       label: `API Mix B (${counts.apiMixB})`,
       type: 'summing',
-      detail: 'Secondary bus for alternate balance or stem handling',
+      detail: 'Independent API bus with the same iron character, kept separate for stem balance',
     });
   }
 
@@ -155,7 +155,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-otb',
       label: `OTB tributary (${counts.otb})`,
       type: 'summing',
-      detail: 'Overflow color lane that rejoins the console path',
+      detail: 'Tonelux discrete sum + TX-100 transformer before reinjection into the console bus',
     });
   }
 
@@ -164,7 +164,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-pueblo-open',
       label: `Open Pueblo lanes (${counts.puebloA + counts.puebloB})`,
       type: 'summing',
-      detail: 'Independent active branches awaiting the user’s onward decision',
+      detail: 'Cleaner, lower-THD active summing branches with less iron and more separation',
     });
   }
 
@@ -172,7 +172,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
     id: 'mix-print-monitor',
     label: 'Print + monitor tail',
     type: 'converter',
-    detail: 'Dangerous AD+ print path with D-Box+ monitoring',
+    detail: 'Dangerous AD+ capture tail with D-Box+ downstream monitoring reference',
   });
 
   return path;
@@ -334,7 +334,7 @@ export function buildPerspectiveInsights(
     if (perspective === 'engineer') {
       return {
         perspective,
-        summary: `${mixPaths.length} DA outputs are active: ${routingNotes}. This is now a bus-allocation problem with print consequences, not a single stereo afterthought.`,
+        summary: `${mixPaths.length} DA outputs are active: ${routingNotes}. API lanes invoke 2520 + transformer bus tone, the OTB tributary adds an extra TX-100 iron stage, and open Pueblo lanes stay wider-band and lower-color until you decide their re-entry.`,
         warnings: [],
         notes: [],
       };
@@ -342,7 +342,7 @@ export function buildPerspectiveInsights(
 
     return {
       perspective,
-      summary: `${mixPaths.length} analog playback lanes are instantiated across the summing network: ${routingNotes}. Monitoring remains downstream of the print branch through the D-Box+ path.`,
+      summary: `${mixPaths.length} analog playback lanes are instantiated across the summing network: ${routingNotes}. API routes increase harmonic density via amplifier + transformer stages, OTB adds another iron-mediated summing pass, and Pueblo stays the cleaner active path before the D-Box+ / AD+ print tail.`,
       warnings: [],
       notes: [],
     };
