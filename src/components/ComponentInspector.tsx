@@ -1,9 +1,14 @@
-import type { Perspective, Microphone, Preamp, Compressor, Equalizer, OutboardProcessor } from '../types/studio';
+import { useState } from 'react';
+import type { Perspective, Microphone, Preamp, Compressor, Equalizer, OutboardProcessor, SummingNode, MonitorSpeaker } from '../types/studio';
+import GearSilhouette from './GearSilhouette';
+import { gearImage } from '../utils/gearImage';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
 import { equalizers } from '../data/equalizers';
 import { outboardProcessors } from '../data/outboard';
+import { cascadeNodes, monitorSpeakers, nodeZones } from '../data/cascade';
+import { nodeConsequence, roleLabel } from './CascadeView';
 import { getContextTags } from '../engine/studioViewModel';
 
 interface Props {
@@ -78,7 +83,7 @@ function dedupeMicrophoneFamilies(pool: Microphone[]): Microphone[] {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <h4 className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{title}</h4>
+      <h4 className="text-silkscreen text-[8px]">{title}</h4>
       {children}
     </div>
   );
@@ -88,7 +93,7 @@ function Spec({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex justify-between text-xs">
       <span className="text-zinc-500">{label}</span>
-      <span className="text-zinc-300 font-mono">{value}</span>
+      <span className="font-mono" style={{ color: 'var(--sa-cream-dim)' }}>{value}</span>
     </div>
   );
 }
@@ -102,7 +107,7 @@ function ContextTags({ tags, tone }: { tags: string[]; tone: string }) {
       </p>
       <div className="flex flex-wrap gap-1">
         {tags.map((tag) => (
-          <span key={tag} className={`text-[10px] px-1.5 py-0.5 rounded border ${tone}`}>{tag}</span>
+          <span key={tag} className={`text-[9px] px-1.5 py-0.5 rounded-[2px] border ${tone}`}>{tag}</span>
         ))}
       </div>
     </div>
@@ -125,7 +130,7 @@ function DescriptiveList({
       <div className="text-xs text-zinc-500">{title}</div>
       <div className="flex flex-wrap gap-1">
         {items.map((item) => (
-          <span key={item} className={`text-[10px] px-1.5 py-0.5 rounded border ${tone}`}>{item}</span>
+          <span key={item} className={`text-[9px] px-1.5 py-0.5 rounded-[2px] border ${tone}`}>{item}</span>
         ))}
       </div>
     </div>
@@ -363,15 +368,15 @@ function AlternativeCard({
   return (
     <button
       onClick={() => onInspect(option.component.id)}
-      className={`w-full rounded-xl border px-3 py-3 text-left transition hover:border-zinc-600 hover:bg-zinc-900/80 ${tone}`}
+      className={`w-full mat-recess rounded-[3px] border px-3 py-3 text-left transition hover:border-zinc-600 ${tone}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{label}</span>
-        <span className="text-[10px] text-zinc-500">Compare</span>
+        <span className="text-silkscreen-faint text-[8px]">{label}</span>
+        <span className="text-[9px] text-zinc-500">Compare</span>
       </div>
-      <div className="mt-2 text-sm font-medium text-zinc-100">{option.component.name}</div>
+      <div className="mt-2 text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{option.component.name}</div>
       <div className="mt-1 text-[11px] text-zinc-400">{describeComponentMeta(option.component)}</div>
-      <p className="mt-2 text-[11px] leading-relaxed text-zinc-300">{subtitle}</p>
+      <p className="mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>{subtitle}</p>
     </button>
   );
 }
@@ -388,7 +393,7 @@ function AlternativeSection({
 
   return (
     <Section title="Compare Direction">
-      <p className="text-[11px] leading-relaxed text-zinc-500">
+      <p className="text-[11px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
         These are not better-or-worse picks. They are nearby alternatives that lean the same decision toward more precision or more character.
       </p>
       <div className="mt-2 space-y-2">
@@ -400,12 +405,23 @@ function AlternativeSection({
   );
 }
 
+function GearImage({ id, category, micType, accent }: { id: string; category: 'microphone' | 'preamp' | 'compressor' | 'equalizer' | 'outboard'; micType?: Microphone['type']; accent?: string }) {
+  const { src, form } = gearImage(id, category, micType);
+  if (src) {
+    return <img src={src} alt="" className="h-16 w-auto rounded-[3px] object-contain opacity-80" />;
+  }
+  return <GearSilhouette form={form} accent={accent ?? '#a0a0a0'} className={category === 'microphone' ? 'h-14 w-10' : 'h-8 w-24'} />;
+}
+
 function MicInspector({ mic, perspective }: { mic: Microphone; perspective: Perspective }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-bold text-amber-300">{mic.name}</h3>
-        <div className="text-xs text-zinc-500">{mic.vendor} · {mic.type} · {mic.qty}× available</div>
+      <div className="flex items-start gap-3">
+        <GearImage id={mic.id} category="microphone" micType={mic.type} accent="var(--sa-signal-active)" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-signal-active)' }}>{mic.name}</h3>
+          <div className="text-xs text-zinc-500">{mic.vendor} · {mic.type} · {mic.qty}× available</div>
+        </div>
       </div>
 
       <OverviewSection component={mic} perspective={perspective} />
@@ -464,9 +480,15 @@ function MicInspector({ mic, perspective }: { mic: Microphone; perspective: Pers
 function PreampInspector({ pre, perspective }: { pre: Preamp; perspective: Perspective }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-bold text-blue-300">{pre.name}</h3>
-        <div className="text-xs text-zinc-500">{pre.vendor} · {pre.topology} · {pre.channels}ch</div>
+      <div className="flex items-start gap-3">
+        <GearImage id={pre.id} category="preamp" accent="#60a5fa" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{pre.name}</h3>
+          <div className="text-xs text-zinc-500">
+            {pre.vendor} · {pre.topology} · {pre.channels}ch
+            {pre.input_z_hi && <span className="ml-1.5 inline-flex items-center rounded-[2px] border border-amber-700/30 bg-amber-950/20 px-1 text-[9px] font-medium text-amber-300">Hi-Z</span>}
+          </div>
+        </div>
       </div>
 
       <OverviewSection component={pre} perspective={perspective} />
@@ -489,6 +511,7 @@ function PreampInspector({ pre, perspective }: { pre: Preamp; perspective: Persp
         <>
           <Section title="Signal Chain">
             <Spec label="Input Z" value={`${pre.input_z_ohm} Ω`} />
+            {pre.input_z_hi && <Spec label="Instrument Z" value={`${pre.input_z_hi.toLocaleString()} Ω (Hi-Z)`} />}
             <Spec label="Output Z" value={`${pre.output_z_ohm} Ω`} />
             <Spec label="Gain Range" value={`${pre.gain_range_db[0]}–${pre.gain_range_db[1]} dB`} />
             <Spec label="Noise Floor" value={`${pre.noise_floor_db} dBu`} />
@@ -507,6 +530,7 @@ function PreampInspector({ pre, perspective }: { pre: Preamp; perspective: Persp
         <>
           <Section title="Electrical Specifications">
             <Spec label="Input Impedance" value={`${pre.input_z_ohm} Ω`} />
+            {pre.input_z_hi && <Spec label="Instrument Input Z" value={`${pre.input_z_hi.toLocaleString()} Ω (Hi-Z / DI)`} />}
             <Spec label="Output Impedance" value={`${pre.output_z_ohm} Ω`} />
             <Spec label="Gain Range" value={`${pre.gain_range_db[0]}–${pre.gain_range_db[1]} dB`} />
             <Spec label="EIN / Noise Floor" value={`${pre.noise_floor_db} dBu`} />
@@ -525,9 +549,12 @@ function PreampInspector({ pre, perspective }: { pre: Preamp; perspective: Persp
 function CompInspector({ comp, perspective }: { comp: Compressor; perspective: Perspective }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-bold text-purple-300">{comp.name}</h3>
-        <div className="text-xs text-zinc-500">{comp.vendor} · {comp.topology} · {comp.channels}ch</div>
+      <div className="flex items-start gap-3">
+        <GearImage id={comp.id} category="compressor" accent="#c084fc" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{comp.name}</h3>
+          <div className="text-xs text-zinc-500">{comp.vendor} · {comp.topology} · {comp.channels}ch</div>
+        </div>
       </div>
 
       <OverviewSection component={comp} perspective={perspective} />
@@ -585,9 +612,12 @@ function CompInspector({ comp, perspective }: { comp: Compressor; perspective: P
 function EQInspector({ eq, perspective }: { eq: Equalizer; perspective: Perspective }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-bold text-teal-300">{eq.name}</h3>
-        <div className="text-xs text-zinc-500">{eq.vendor} · {eq.topology} · {eq.channels}ch</div>
+      <div className="flex items-start gap-3">
+        <GearImage id={eq.id} category="equalizer" accent="#2dd4bf" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{eq.name}</h3>
+          <div className="text-xs text-zinc-500">{eq.vendor} · {eq.topology} · {eq.channels}ch</div>
+        </div>
       </div>
 
       <OverviewSection component={eq} perspective={perspective} />
@@ -645,9 +675,12 @@ function EQInspector({ eq, perspective }: { eq: Equalizer; perspective: Perspect
 function OutboardInspector({ proc, perspective }: { proc: OutboardProcessor; perspective: Perspective }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-bold text-rose-300">{proc.name}</h3>
-        <div className="text-xs text-zinc-500">{proc.vendor} · {proc.type} · {proc.format} · {proc.channels}ch</div>
+      <div className="flex items-start gap-3">
+        <GearImage id={proc.id} category="outboard" accent="#fb7185" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{proc.name}</h3>
+          <div className="text-xs text-zinc-500">{proc.vendor} · {proc.type} · {proc.format} · {proc.channels}ch</div>
+        </div>
       </div>
 
       <OverviewSection component={proc} perspective={perspective} />
@@ -704,6 +737,142 @@ function OutboardInspector({ proc, perspective }: { proc: OutboardProcessor; per
   );
 }
 
+function SummingNodeInspector({ node, perspective }: { node: SummingNode; perspective: Perspective }) {
+  const zones = nodeZones.filter(z => z.node_id === node.id);
+  const [activeZone, setActiveZone] = useState<string | null>(null);
+  const zone = zones.find(z => z.id === activeZone);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{node.name}</h3>
+        <div className="text-xs text-zinc-500">{node.vendor} · {roleLabel(node.role)}</div>
+      </div>
+
+      <Section title="Signal Flow Context">
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+          {nodeConsequence(node, perspective)}
+        </p>
+      </Section>
+
+      {/* Zone drill-down */}
+      {zones.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-silkscreen text-[8px]">Contained sections</div>
+          <div className="flex gap-1.5">
+            {zones.map(z => (
+              <button
+                key={z.id}
+                type="button"
+                onClick={() => setActiveZone(prev => prev === z.id ? null : z.id)}
+                className="mat-recess rounded-[3px] border px-3 py-2 text-left transition-all cursor-pointer text-xs"
+                style={{
+                  borderColor: z.accent + (activeZone === z.id ? '60' : '25'),
+                  backgroundColor: z.accent + (activeZone === z.id ? '15' : '06'),
+                  color: activeZone === z.id ? 'var(--sa-cream)' : 'var(--sa-cream-dim)',
+                }}
+              >
+                <div className="font-medium">{z.label}</div>
+              </button>
+            ))}
+          </div>
+          {zone && (
+            <div
+              className="mat-recess rounded-[3px] border p-3 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200"
+              style={{ borderColor: zone.accent + '30', backgroundColor: zone.accent + '08' }}
+            >
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+                {perspective === 'musician' ? zone.musician : perspective === 'engineer' ? zone.engineer : zone.technical}
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {zone.specs.map(s => (
+                  <Spec key={s.label} label={s.label} value={s.value} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {perspective === 'musician' && !zone && (
+        <Section title="Character">
+          <p className="text-sm leading-relaxed text-zinc-300">{node.character}</p>
+        </Section>
+      )}
+
+      {(perspective === 'engineer' || perspective === 'technical') && !zone && (
+        <Section title="Electrical Specifications">
+          {node.max_input_dbu !== null && <Spec label="Max Input" value={`+${node.max_input_dbu} dBu`} />}
+          {node.max_output_dbu !== null && <Spec label="Max Output" value={`+${node.max_output_dbu} dBu`} />}
+          {node.noise_floor_dbu !== null && <Spec label="Noise Floor" value={`${node.noise_floor_dbu} dBu`} />}
+          {node.thd_percent !== null && <Spec label="THD" value={`${node.thd_percent}%`} />}
+          {node.dynamic_range_db !== null && <Spec label="Dynamic Range" value={`${node.dynamic_range_db} dB`} />}
+          <Spec label="Channels" value={`${node.input_channels} in / ${node.output_channels} out`} />
+          <Spec label="Transformer" value={node.transformer_count > 0 ? `${node.transformer_count} transformer${node.transformer_count > 1 ? 's' : ''}` : 'Transformerless'} />
+          {node.has_insert && <Spec label="Inserts" value="Per-channel + bus" />}
+        </Section>
+      )}
+
+      {perspective === 'technical' && !zone && (
+        <Section title="Engineering Notes">
+          <p className="text-xs text-zinc-400 leading-relaxed">{node.engineering}</p>
+        </Section>
+      )}
+
+      {(node.receives_from.length > 0 || node.feeds_into.length > 0) && (
+        <Section title="Topology">
+          {node.receives_from.length > 0 && (
+            <div className="text-xs">
+              <span className="text-zinc-600">Receives from</span>
+              <span className="ml-2" style={{ color: 'var(--sa-cream-dim)' }}>
+                {node.receives_from.map(id => cascadeNodes.find(n => n.id === id)?.name ?? id).join(', ')}
+              </span>
+            </div>
+          )}
+          {node.feeds_into.length > 0 && (
+            <div className="text-xs">
+              <span className="text-zinc-600">Feeds</span>
+              <span className="ml-2" style={{ color: 'var(--sa-cream-dim)' }}>
+                {node.feeds_into.map(id => cascadeNodes.find(n => n.id === id)?.name ?? id).join(', ')}
+              </span>
+            </div>
+          )}
+        </Section>
+      )}
+    </div>
+  );
+}
+
+function MonitorSpeakerInspector({ speaker, perspective }: { speaker: MonitorSpeaker; perspective: Perspective }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{speaker.name}</h3>
+        <div className="text-xs text-zinc-500">{speaker.vendor} · {speaker.driver_config}</div>
+      </div>
+
+      <Section title={perspective === 'technical' ? 'Engineering' : 'Character'}>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+          {perspective === 'technical' ? speaker.engineering : speaker.character}
+        </p>
+      </Section>
+
+      <Section title="Specifications">
+        <Spec label="Type" value={speaker.type === 'passive' ? 'Passive' : 'Active'} />
+        <Spec label="Driver Config" value={speaker.driver_config} />
+        <Spec label="Frequency Range" value={`${speaker.freq_range_hz[0]} Hz – ${speaker.freq_range_hz[1] >= 1000 ? `${speaker.freq_range_hz[1] / 1000}k` : speaker.freq_range_hz[1]} Hz`} />
+        {speaker.amplifier && <Spec label="Amplifier" value={speaker.amplifier} />}
+      </Section>
+
+      <Section title="Use Case">
+        <p className="text-sm italic leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+          {speaker.use_case}
+        </p>
+      </Section>
+    </div>
+  );
+}
+
 export default function ComponentInspector({ perspective, inspectedId, onInspect, onClose }: Props) {
   if (!inspectedId) {
     return (
@@ -719,13 +888,15 @@ export default function ComponentInspector({ perspective, inspectedId, onInspect
   const comp = compressors.find(c => c.id === inspectedId);
   const eq = equalizers.find(e => e.id === inspectedId);
   const outboard = outboardProcessors.find(o => o.id === inspectedId);
+  const cascadeNode = cascadeNodes.find(n => n.id === inspectedId);
+  const speaker = monitorSpeakers.find(s => s.id === inspectedId);
   const inspectable = mic ?? pre ?? comp ?? eq ?? outboard;
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
-          {mic ? 'Microphone' : pre ? 'Preamp' : comp ? 'Compressor' : eq ? 'Equalizer' : outboard ? 'Outboard' : 'Component'}
+        <span className="text-silkscreen text-[8px]">
+          {mic ? 'Microphone' : pre ? 'Preamp' : comp ? 'Compressor' : eq ? 'Equalizer' : outboard ? 'Outboard' : cascadeNode ? 'Signal Path' : speaker ? 'Monitor' : 'Component'}
         </span>
         <button
           onClick={onClose}
@@ -740,9 +911,11 @@ export default function ComponentInspector({ perspective, inspectedId, onInspect
       {comp && <CompInspector comp={comp} perspective={perspective} />}
       {eq && <EQInspector eq={eq} perspective={perspective} />}
       {outboard && <OutboardInspector proc={outboard} perspective={perspective} />}
+      {cascadeNode && <SummingNodeInspector node={cascadeNode} perspective={perspective} />}
+      {speaker && <MonitorSpeakerInspector speaker={speaker} perspective={perspective} />}
       {inspectable && <AlternativeSection component={inspectable} onInspect={onInspect} />}
 
-      {!mic && !pre && !comp && !eq && !outboard && (
+      {!mic && !pre && !comp && !eq && !outboard && !cascadeNode && !speaker && (
         <div className="text-sm text-zinc-500">Component not found: {inspectedId}</div>
       )}
     </div>

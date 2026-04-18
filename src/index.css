@@ -1,73 +1,598 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════
+   SIGNAL ATLAS — IMMERSIVE STUDIO MATERIAL SYSTEM
+   
+   Design language: physical rack hardware in a dim control room
+   Light source: overhead, slightly forward — consistent everywhere
+   Color temperature: warm (amber cast on neutrals)
+   Material: brushed anodized aluminum, engraved silkscreen, nickel
+   ═══════════════════════════════════════════════════════════════════ */
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
+:root {
+  /* Warm studio palette */
+  --sa-black: #0a0907;
+  --sa-panel: #141311;
+  --sa-panel-light: #1c1a17;
+  --sa-rail: #080806;
+  --sa-cream: #e8dcc8;
+  --sa-cream-dim: rgba(232, 220, 200, 0.72);
+  --sa-cream-faint: rgba(232, 220, 200, 0.42);
+  --sa-warm-white: rgba(245, 238, 226, 0.8);
+  --sa-metal-grain: rgba(255,255,255,0.012);
+  --sa-metal-grain-alt: rgba(0,0,0,0.015);
+  
+  /* LED colors */
+  --sa-led-green: #22c55e;
+  --sa-led-amber: #f59e0b;
+  --sa-led-red: #ef4444;
+  --sa-led-blue: #3b82f6;
+  
+  /* Signal flow */
+  --sa-signal-active: #d4a044;
+  --sa-signal-dim: rgba(161, 161, 170, 0.18);
+  
+  /* Lens accent — overridden per perspective */
+  --sa-lens-accent: #d4a044;
+  --sa-lens-glow: rgba(212, 160, 68, 0.14);
+  --sa-lens-tint: rgba(212, 160, 68, 0.08);
+  --sa-lens-border: rgba(212, 160, 68, 0.18);
+  --sa-lens-wash: rgba(212, 160, 68, 0.04);
+  --sa-lens-text: rgba(212, 160, 68, 0.85);
+  
+  /* Timing — musical curves */
+  --sa-ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --sa-ease-settle: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 body {
   margin: 0;
-  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: "Inter", "SF Pro Display", "Avenir Next", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background:
-    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(34, 211, 238, 0.08), transparent 30%),
-    #09090b;
-  color: #e4e4e7;
-  transition: background 0.45s ease, color 0.45s ease;
+  background: var(--sa-black);
+  color: var(--sa-cream);
+  transition: background 0.45s var(--sa-ease-settle), color 0.45s var(--sa-ease-settle);
 }
 
 #root {
   min-height: 100vh;
 }
 
+/* ── Atmospheric grain: subtle noise-like texture over the entire surface ── */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 9999;
   background:
-    linear-gradient(to bottom, rgba(255,255,255,0.03), transparent 18%, transparent 82%, rgba(255,255,255,0.02)),
-    repeating-linear-gradient(to bottom, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 4px);
-  opacity: 0.25;
-  mix-blend-mode: soft-light;
+    repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.008) 0px,
+      transparent 1px,
+      transparent 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.006) 0px,
+      transparent 1px,
+      transparent 4px
+    );
+  opacity: 0.4;
+  mix-blend-mode: overlay;
 }
 
+/* ── Vignette: implied room lighting — bright center, dark edges ── */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at center, transparent 52%, rgba(0, 0, 0, 0.3) 100%);
+  z-index: 9998;
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 42%,
+    transparent 0%,
+    rgba(0, 0, 0, 0.15) 60%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
 }
 
+/* ── Studio shell: rack environment ── */
 .studio-atlas-shell {
+  position: relative;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, var(--sa-lens-glow), transparent 50%),
+    linear-gradient(180deg, var(--sa-mode-tint, transparent) 0%, transparent 40%),
+    var(--sa-black);
+  transition: background 0.6s var(--sa-ease-settle);
+}
+
+/* ── Warm selection highlight ── */
+::selection {
+  background: rgba(212, 160, 68, 0.28);
+  color: var(--sa-cream);
+}
+
+/* ── Lens color identity ── */
+.lens-musician {
+  --sa-lens-accent: #34d399;
+  --sa-lens-glow: rgba(52, 211, 153, 0.14);
+  --sa-lens-tint: rgba(52, 211, 153, 0.08);
+  --sa-lens-border: rgba(52, 211, 153, 0.20);
+  --sa-lens-wash: rgba(52, 211, 153, 0.04);
+  --sa-lens-text: rgba(52, 211, 153, 0.85);
+}
+.lens-engineer {
+  --sa-lens-accent: #f87171;
+  --sa-lens-glow: rgba(248, 113, 113, 0.14);
+  --sa-lens-tint: rgba(248, 113, 113, 0.08);
+  --sa-lens-border: rgba(248, 113, 113, 0.20);
+  --sa-lens-wash: rgba(248, 113, 113, 0.04);
+  --sa-lens-text: rgba(248, 113, 113, 0.85);
+}
+.lens-technical {
+  --sa-lens-accent: #fbbf24;
+  --sa-lens-glow: rgba(251, 191, 36, 0.14);
+  --sa-lens-tint: rgba(251, 191, 36, 0.08);
+  --sa-lens-border: rgba(251, 191, 36, 0.20);
+  --sa-lens-wash: rgba(251, 191, 36, 0.04);
+  --sa-lens-text: rgba(251, 191, 36, 0.85);
+}
+
+/* ── Mode atmosphere — subtle temperature shift ── */
+.mode-tracking {
+  --sa-mode-tint: rgba(96, 165, 250, 0.03);
+  --sa-mode-accent: rgba(96, 165, 250, 0.06);
+}
+.mode-mixing {
+  --sa-mode-tint: rgba(251, 146, 60, 0.03);
+  --sa-mode-accent: rgba(251, 146, 60, 0.06);
+}
+
+/* ═══════════════════════════════════
+   MATERIAL CLASSES
+   ═══════════════════════════════════ */
+
+/* Brushed anodized aluminum — dark (API/rack style) */
+.mat-brushed-dark {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--sa-metal-grain) 0px,
+      var(--sa-metal-grain-alt) 1px,
+      var(--sa-metal-grain) 2px
+    ),
+    linear-gradient(180deg, #1c1916 0%, #141210 100%);
+}
+
+/* Brushed aluminum — medium (panel face) */
+.mat-brushed-mid {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.015) 0px,
+      rgba(0,0,0,0.01) 1px,
+      rgba(255,255,255,0.01) 2px
+    ),
+    linear-gradient(180deg, #282520 0%, #1e1c17 100%);
+}
+
+/* Dock / control strip — darker than content panels, reads as infrastructure */
+.mat-dock {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--sa-metal-grain) 0px,
+      var(--sa-metal-grain-alt) 1px,
+      var(--sa-metal-grain) 2px
+    ),
+    linear-gradient(180deg, #121110 0%, #0d0c0b 100%);
+}
+
+/* ── Machined rack panel ── */
+.mat-rack-panel {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255,255,255,0.06),
+    inset 0 -1px 0 0 rgba(0,0,0,0.35),
+    inset 1px 0 0 0 rgba(255,255,255,0.025),
+    inset -1px 0 0 0 rgba(255,255,255,0.025),
+    0 1px 3px 0 rgba(0,0,0,0.55),
+    0 4px 14px -3px rgba(0,0,0,0.35);
+}
+
+/* ── Recessed area (label tray, socket recess) ── */
+.mat-recess {
+  box-shadow:
+    inset 0 1px 2px 0 rgba(0,0,0,0.5),
+    inset 0 -1px 0 0 rgba(255,255,255,0.03),
+    inset 1px 0 1px 0 rgba(0,0,0,0.2),
+    inset -1px 0 1px 0 rgba(0,0,0,0.2);
+  background: linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 40%);
+}
+
+/* ── Raised bezel (protruding control area) ── */
+.mat-raised {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255,255,255,0.10),
+    inset 0 -1px 0 0 rgba(0,0,0,0.45),
+    0 1px 0 0 rgba(0,0,0,0.5),
+    0 2px 8px -1px rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.035);
+}
+
+/* ── Floating panel (inspectors, overlays) ── */
+.mat-floating {
+  box-shadow:
+    0 4px 6px rgba(0,0,0,0.35),
+    0 12px 32px -4px rgba(0,0,0,0.4),
+    0 0 0 1px rgba(255,255,255,0.03);
+}
+
+/* ═══════════════════════════════════
+   ENGRAVED SILKSCREEN TEXT
+   ═══════════════════════════════════ */
+
+.text-silkscreen {
+  color: var(--sa-cream-dim);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+
+.text-silkscreen-faint {
+  color: var(--sa-cream-faint);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 500;
+}
+
+.text-engraved {
+  color: rgba(255, 255, 255, 0.52);
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ═══════════════════════════════════
+   LED INDICATORS
+   ═══════════════════════════════════ */
+
+.led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.led-off {
+  background: radial-gradient(circle, #1a1e1a 0%, #0a0a0a 100%);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.5);
+}
+
+.led-green {
+  background: radial-gradient(circle at 45% 40%,
+    #fff 0%,
+    var(--sa-led-green) 30%,
+    rgba(34,197,94,0.5) 100%
+  );
+  box-shadow:
+    0 0 3px 1px rgba(34,197,94,0.5),
+    0 0 8px 2px rgba(34,197,94,0.18),
+    0 0 16px 4px rgba(34,197,94,0.06);
+}
+
+.led-amber {
+  background: radial-gradient(circle at 45% 40%,
+    #fff 0%,
+    var(--sa-led-amber) 30%,
+    rgba(245,158,11,0.5) 100%
+  );
+  box-shadow:
+    0 0 3px 1px rgba(245,158,11,0.5),
+    0 0 8px 2px rgba(245,158,11,0.18),
+    0 0 16px 4px rgba(245,158,11,0.06);
+}
+
+.led-red {
+  background: radial-gradient(circle at 45% 40%,
+    #fff 0%,
+    var(--sa-led-red) 30%,
+    rgba(239,68,68,0.5) 100%
+  );
+  box-shadow:
+    0 0 3px 1px rgba(239,68,68,0.5),
+    0 0 8px 2px rgba(239,68,68,0.18),
+    0 0 16px 4px rgba(239,68,68,0.06);
+}
+
+/* ═══════════════════════════════════
+   TT JACK SOCKETS
+   ═══════════════════════════════════ */
+
+.tt-jack {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--sa-cream-dim);
+  text-shadow:
+    0 0 3px rgba(0,0,0,0.95),
+    0 0 6px rgba(0,0,0,0.7);
+  background:
+    radial-gradient(circle at 50% 48%,
+      #000000 0%,
+      #000000 26%,
+      #3a3d44 27%,
+      #4a4d55 32%,
+      #3a3d44 36%,
+      #1a1c20 37%,
+      #1a1c20 42%,
+      #4a4d55 43%,
+      #5a5e68 47%,
+      #4a4d55 51%,
+      #2a2d33 52%,
+      transparent 58%
+    );
+  box-shadow:
+    inset 0 1.5px 2px rgba(0,0,0,0.75),
+    inset 0 -0.5px 0.5px rgba(255,255,255,0.05),
+    0 0.5px 0 rgba(255,255,255,0.04);
   position: relative;
 }
 
-.studio-atlas-shell::before {
-  content: "";
+/* Metallic specular highlight on jack */
+.tt-jack::after {
+  content: '';
   position: absolute;
   inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(
+    155deg,
+    rgba(255,255,255,0.07) 0%,
+    transparent 40%,
+    transparent 60%,
+    rgba(255,255,255,0.015) 100%
+  );
   pointer-events: none;
+}
+
+/* Active/patched jack — warm glow ring */
+.tt-jack-active {
+  box-shadow:
+    inset 0 1.5px 2px rgba(0,0,0,0.6),
+    0 0 4px 1px rgba(212, 160, 68, 0.35),
+    0 0 10px 2px rgba(212, 160, 68, 0.12);
+}
+
+/* Selected jack — bright accent ring */
+.tt-jack-selected {
+  box-shadow:
+    inset 0 1.5px 2px rgba(0,0,0,0.5),
+    0 0 0 2px rgba(212, 160, 68, 0.7),
+    0 0 8px 2px rgba(212, 160, 68, 0.25),
+    0 0 18px 4px rgba(212, 160, 68, 0.08);
+}
+
+/* Row-position hue coding */
+.tt-jack-top {
+  color: #e8937d;
+  text-shadow: 0 0 3px rgba(0,0,0,0.95), 0 0 5px rgba(180,70,50,0.15);
+}
+.tt-jack-bottom {
+  color: #7dcba0;
+  text-shadow: 0 0 3px rgba(0,0,0,0.95), 0 0 5px rgba(50,160,90,0.15);
+}
+.tt-jack-unnormalled {
+  color: #d4b85c;
+  text-shadow: 0 0 3px rgba(0,0,0,0.95), 0 0 5px rgba(180,150,50,0.15);
+}
+
+/* ═══════════════════════════════════
+   SCREWHEAD
+   ═══════════════════════════════════ */
+
+.screwhead {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
   background:
-    linear-gradient(90deg, rgba(255,255,255,0.018), transparent 22%, transparent 78%, rgba(255,255,255,0.018)),
-    radial-gradient(circle at top center, rgba(255,255,255,0.04), transparent 32%);
-  opacity: 0.7;
+    linear-gradient(0deg, transparent 42%, rgba(0,0,0,0.45) 42%, rgba(0,0,0,0.45) 58%, transparent 58%),
+    linear-gradient(90deg, transparent 42%, rgba(0,0,0,0.45) 42%, rgba(0,0,0,0.45) 58%, transparent 58%),
+    radial-gradient(circle at 40% 35%,
+      rgba(255,255,255,0.12) 0%,
+      rgba(255,255,255,0.02) 50%,
+      transparent 70%
+    ),
+    radial-gradient(circle, #3a3d42 0%, #22242a 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.06),
+    inset 0 -1px 1px rgba(0,0,0,0.35),
+    0 1px 2px rgba(0,0,0,0.45);
 }
 
-::selection {
-  background: rgba(34, 211, 238, 0.24);
-  color: #f4f4f5;
+/* ═══════════════════════════════════
+   RACK GAP (between panel rows)
+   ═══════════════════════════════════ */
+
+.rack-gap {
+  height: 6px;
+  background: linear-gradient(180deg, #060604 0%, #0a0908 50%, #0e0d0b 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0,0,0,0.65),
+    inset 0 -1px 0 rgba(255,255,255,0.015);
+  border-radius: 1px;
 }
 
-/* Demo walkthrough: brief highlight pulse on the target row */
+/* ═══════════════════════════════════
+   BREATHING ANIMATION (active signal)
+   ═══════════════════════════════════ */
+
+@keyframes signal-breathe {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}
+
+.signal-live {
+  animation: signal-breathe 3.5s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════
+   MIC LOCKER — WARM CABINET MATERIAL
+   ═══════════════════════════════════ */
+
+.locker-cabinet {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(139, 90, 43, 0.012) 0px,
+      transparent 1px,
+      transparent 5px
+    ),
+    linear-gradient(180deg, #1e1812 0%, #171310 50%, #12100c 100%);
+  /* Outer bezel: dark gap → warm brass highlight → deep shadow */
+  outline: 1px solid rgba(100, 70, 35, 0.25);
+  outline-offset: -1px;
+  box-shadow:
+    /* inner brass highlight on top/left edges */
+    inset 0 1px 0 0 rgba(190, 140, 75, 0.12),
+    inset 1px 0 0 0 rgba(190, 140, 75, 0.06),
+    /* inner shadow on bottom/right edges */
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.5),
+    inset -1px 0 0 0 rgba(0, 0, 0, 0.2),
+    /* second inset ring — dark channel between border and content */
+    inset 0 0 0 3px rgba(10, 8, 5, 0.35),
+    /* outer drop shadow */
+    0 2px 8px 0 rgba(0, 0, 0, 0.45),
+    0 8px 24px -4px rgba(0, 0, 0, 0.3);
+}
+
+/* Drawer face — raised wooden front with bevel frame */
+.locker-drawer {
+  background:
+    linear-gradient(180deg, rgba(50,38,22,0.95) 0%, rgba(35,26,16,0.9) 100%);
+  /* Inner bevel: light top-left, dark bottom-right */
+  box-shadow:
+    inset 0 1px 0 0 rgba(200,155,85,0.13),
+    inset 1px 0 0 0 rgba(180,130,70,0.06),
+    inset 0 -1px 0 0 rgba(0,0,0,0.35),
+    inset -1px 0 0 0 rgba(0,0,0,0.15),
+    0 1px 3px 0 rgba(0,0,0,0.22);
+  outline: 1px solid rgba(80,55,28,0.35);
+  outline-offset: -1px;
+  transition: background 0.2s, box-shadow 0.2s, outline-color 0.2s;
+}
+.locker-drawer:hover {
+  background:
+    linear-gradient(180deg, rgba(60,45,26,0.95) 0%, rgba(42,32,19,0.9) 100%);
+  outline-color: rgba(120,85,40,0.35);
+  box-shadow:
+    inset 0 1px 0 0 rgba(220,170,95,0.16),
+    inset 1px 0 0 0 rgba(200,150,80,0.08),
+    inset 0 -1px 0 0 rgba(0,0,0,0.38),
+    inset -1px 0 0 0 rgba(0,0,0,0.18),
+    0 1px 5px 0 rgba(0,0,0,0.28);
+}
+.locker-drawer-open {
+  background:
+    linear-gradient(180deg, rgba(40,30,18,0.6) 0%, rgba(30,22,14,0.5) 100%) !important;
+  outline-color: rgba(60,45,25,0.25) !important;
+  box-shadow:
+    inset 0 1px 3px -1px rgba(0,0,0,0.3),
+    0 1px 2px 0 rgba(0,0,0,0.12) !important;
+}
+.locker-drawer-active {
+  outline-color: rgba(120,85,40,0.3);
+  box-shadow:
+    inset 0 1px 0 0 rgba(200,155,85,0.13),
+    inset 1px 0 0 0 rgba(180,130,70,0.06),
+    inset 0 -1px 0 0 rgba(0,0,0,0.35),
+    inset -1px 0 0 0 rgba(0,0,0,0.15),
+    0 0 8px -2px var(--drawer-accent, rgba(180,130,70,0.15)),
+    0 1px 3px 0 rgba(0,0,0,0.22);
+}
+
+/* Interior of an open drawer — dark felt-lined recess */
+.locker-drawer-interior {
+  background:
+    linear-gradient(180deg, rgba(18,16,12,0.9) 0%, rgba(14,12,10,0.85) 100%);
+  box-shadow:
+    inset 0 2px 6px -2px rgba(0,0,0,0.5),
+    inset 0 0 0 1px rgba(0,0,0,0.15);
+}
+
+/* Each mic sitting in its foam cutout */
+.locker-mic-slot {
+  background:
+    linear-gradient(180deg, rgba(28,24,18,0.7) 0%, rgba(22,19,15,0.5) 100%);
+  box-shadow:
+    inset 0 1px 2px -1px rgba(0,0,0,0.3),
+    0 1px 0 0 rgba(255,255,255,0.01);
+  transition: background 0.2s, box-shadow 0.2s, border-color 0.25s;
+}
+.locker-mic-slot:hover {
+  background:
+    linear-gradient(180deg, rgba(35,30,22,0.75) 0%, rgba(28,24,18,0.6) 100%);
+  box-shadow:
+    inset 0 1px 2px -1px rgba(0,0,0,0.3),
+    0 1px 0 0 rgba(255,255,255,0.02),
+    0 0 4px -1px rgba(180,130,70,0.08);
+}
+.locker-mic-slot-active {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 70%) !important;
+}
+
+/* ═══════════════════════════════════
+   UTILITY ANIMATIONS
+   ═══════════════════════════════════ */
+
 @keyframes demo-ring-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
-  50%  { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25); }
-  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(212, 160, 68, 0.45); }
+  50%  { box-shadow: 0 0 0 3px rgba(212, 160, 68, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(212, 160, 68, 0); }
 }
 
 .demo-highlight {
   animation: demo-ring-pulse 1.2s ease-out;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in-up 0.35s var(--sa-ease-smooth) both;
+}
+
+/* ═══════════════════════════════════
+   SCROLLBAR — studio dark
+   ═══════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(232, 220, 200, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 220, 200, 0.22);
 }

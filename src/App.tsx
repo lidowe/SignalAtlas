@@ -10,18 +10,18 @@ const ComponentInspector = lazy(() => import('./components/ComponentInspector'))
 
 const shellTheme = {
   musician: {
-    frame: 'bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.1),transparent_34%),#09090b]',
-    glowA: 'bg-emerald-500/10',
+    frame: 'bg-[var(--sa-black)]',
+    glowA: 'bg-emerald-500/12',
     glowB: 'bg-lime-400/8',
   },
   engineer: {
-    frame: 'bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,115,22,0.1),transparent_34%),#09090b]',
-    glowA: 'bg-red-500/10',
+    frame: 'bg-[var(--sa-black)]',
+    glowA: 'bg-red-500/12',
     glowB: 'bg-orange-400/8',
   },
   technical: {
-    frame: 'bg-[radial-gradient(circle_at_top_left,rgba(234,179,8,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.1),transparent_34%),#09090b]',
-    glowA: 'bg-yellow-400/10',
+    frame: 'bg-[var(--sa-black)]',
+    glowA: 'bg-yellow-400/12',
     glowB: 'bg-amber-400/8',
   },
 } as const;
@@ -64,7 +64,7 @@ function App() {
   const theme = shellTheme[state.perspective];
 
   return (
-    <div className={`studio-atlas-shell h-screen h-[100svh] flex flex-col overflow-hidden text-zinc-200 transition-colors duration-500 ${theme.frame}`}>
+    <div className={`studio-atlas-shell lens-${state.perspective} mode-${state.mode} h-screen h-[100svh] flex flex-col overflow-hidden text-zinc-200 transition-colors duration-500 ${theme.frame}`}>
       <Header
         perspective={state.perspective}
         mode={state.mode}
@@ -134,10 +134,10 @@ function App() {
               className="fixed inset-0 z-20 bg-zinc-950/70 backdrop-blur-sm lg:hidden"
             />
 
-            <aside className="fixed inset-x-0 bottom-0 top-24 z-30 overflow-y-auto rounded-t-2xl border border-zinc-800 bg-zinc-950/96 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:bg-zinc-950/72 lg:shadow-none lg:backdrop-blur shrink-0">
-              <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/92 px-4 py-2 backdrop-blur lg:hidden">
-                <div className="mx-auto mb-2 h-1 w-12 rounded-full bg-zinc-700" />
-                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Focused gear view</div>
+            <aside className="fixed inset-x-0 bottom-0 top-24 z-30 overflow-y-auto mat-brushed-dark rounded-t-[3px] border border-zinc-800/30 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:border-zinc-800/20 lg:shadow-none shrink-0">
+              <div className="sticky top-0 z-10 border-b border-zinc-800/20 mat-brushed-dark px-4 py-2 lg:hidden">
+                <div className="mx-auto mb-2 h-1 w-12 rounded-[2px] bg-zinc-700/40" />
+                <div className="text-silkscreen-faint text-[8px]">Focused gear view</div>
               </div>
               <Suspense fallback={<div className="p-4 text-sm text-zinc-500">Loading inspector…</div>}>
                 <ComponentInspector

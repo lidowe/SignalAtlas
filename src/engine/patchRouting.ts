@@ -18,6 +18,7 @@ function buildParallelEndpointId(index: number, suffix: 'in' | 'out'): string {
 
 function baseEndpoints(mic: Microphone | null, preamp: Preamp | null): PatchEndpoint[] {
   return [
+    // ── Tracking chain ──
     {
       id: 'tie-line-source',
       label: mic ? `${mic.name} output` : 'Mic tie source',
@@ -42,18 +43,54 @@ function baseEndpoints(mic: Microphone | null, preamp: Preamp | null): PatchEndp
       component_id: preamp?.id,
       kind: 'source',
       domain: 'line',
-      normalled_to: 'api-line-input-1',
+      normalled_to: 'aurora-ad-input',
+      half_normal: true,
     },
     {
-      id: 'api-line-input-1',
-      label: 'API line input 1',
-      row_id: 'row-api-line-in',
+      id: 'aurora-ad-input',
+      label: 'Aurora AD input',
+      row_id: 'row-aurora-ad-in',
+      kind: 'converter',
+      domain: 'line',
+    },
+
+    // ── Mixing chain ──
+    {
+      id: 'aurora-da-output',
+      label: 'Aurora DA output',
+      row_id: 'row-aurora-da-out',
+      kind: 'source',
+      domain: 'line',
+      normalled_to: 'tilt-eq-input',
+      half_normal: true,
+    },
+    {
+      id: 'tilt-eq-input',
+      label: 'Tilt EQ input',
+      row_id: 'row-tilt-in',
       kind: 'destination',
       domain: 'line',
     },
     {
+      id: 'tilt-eq-output',
+      label: 'Tilt EQ output',
+      row_id: 'row-tilt-out',
+      kind: 'source',
+      domain: 'line',
+      normalled_to: 'api-line-input-1',
+    },
+    {
+      id: 'api-line-input-1',
+      label: 'API line input',
+      row_id: 'row-api-line-in',
+      kind: 'destination',
+      domain: 'line',
+    },
+
+    // ── API channel inserts ──
+    {
       id: 'api-insert-send-1',
-      label: 'API insert send 1',
+      label: 'API insert send',
       row_id: 'row-insert-send',
       kind: 'insert-send',
       domain: 'line',
@@ -62,15 +99,17 @@ function baseEndpoints(mic: Microphone | null, preamp: Preamp | null): PatchEndp
     },
     {
       id: 'api-insert-return-1',
-      label: 'API insert return 1',
+      label: 'API insert return',
       row_id: 'row-insert-return',
       kind: 'insert-return',
       domain: 'line',
     },
+
+    // ── API Mix A bus ──
     {
       id: 'api-mix-a-bus',
       label: 'API Mix A bus',
-      row_id: 'row-api-mix',
+      row_id: 'row-api-mix-out',
       kind: 'bus',
       domain: 'line',
     },
@@ -90,10 +129,12 @@ function baseEndpoints(mic: Microphone | null, preamp: Preamp | null): PatchEndp
       kind: 'insert-return',
       domain: 'line',
     },
+
+    // ── API Mix B bus ──
     {
       id: 'api-mix-b-bus',
       label: 'API Mix B bus',
-      row_id: 'row-api-mix',
+      row_id: 'row-api-mix-out',
       kind: 'bus',
       domain: 'line',
     },
@@ -113,37 +154,27 @@ function baseEndpoints(mic: Microphone | null, preamp: Preamp | null): PatchEndp
       kind: 'insert-return',
       domain: 'line',
     },
+
+    // ── Pueblo cascade destination ──
     {
-      id: 'api-mix-b-return',
-      label: 'API Mix B return point',
-      row_id: 'row-api-mix',
-      kind: 'insert-return',
-      domain: 'line',
-    },
-    {
-      id: 'tonelux-otb-input',
-      label: 'Tonelux OTB aggregate return input',
-      row_id: 'row-pueblo',
+      id: 'pueblo-bank-c-input',
+      label: 'Pueblo Bank C input',
+      row_id: 'row-pueblo-in',
       kind: 'destination',
       domain: 'line',
     },
     {
-      id: 'tonelux-otb-output',
-      label: 'Tonelux OTB summed return output',
-      row_id: 'row-pueblo',
-      kind: 'source',
-      domain: 'line',
-    },
-    {
-      id: 'parallel-blend-output',
-      label: 'Parallel blend path',
-      row_id: 'row-api-mix',
+      id: 'pueblo-bank-d-input',
+      label: 'Pueblo Bank D input',
+      row_id: 'row-pueblo-in',
       kind: 'destination',
       domain: 'line',
     },
+
+    // ── Print path (patchable, no default normal) ──
     {
-      id: 'ad-plus-input-1',
-      label: 'Dangerous AD+ input 1',
+      id: 'ad-plus-input',
+      label: 'Dangerous AD+ input',
       row_id: 'row-ad-daw',
       kind: 'converter',
       domain: 'line',
@@ -160,6 +191,7 @@ function baseEndpoints(mic: Microphone | null, preamp: Preamp | null): PatchEndp
 
 function baseConnections(mic: Microphone | null, preamp: Preamp | null): PatchConnection[] {
   const connections: PatchConnection[] = [
+    // ── API bus insert normals ──
     {
       id: 'conn-mix-a-send-normal',
       from_endpoint_id: 'api-mix-a-insert-send',
@@ -174,39 +206,20 @@ function baseConnections(mic: Microphone | null, preamp: Preamp | null): PatchCo
       mode: 'normalled',
       active: true,
     },
+    // ── API Mix A → Pueblo Bank C ──
     {
-      id: 'conn-tonelux-to-mix-b-return',
-      from_endpoint_id: 'tonelux-otb-output',
-      to_endpoint_id: 'api-mix-b-return',
-      mode: 'derived',
+      id: 'conn-mix-a-to-pueblo-c',
+      from_endpoint_id: 'api-mix-a-insert-return',
+      to_endpoint_id: 'pueblo-bank-c-input',
+      mode: 'normalled',
       active: true,
     },
+    // ── API Mix B → Pueblo Bank D ──
     {
-      id: 'conn-tonelux-input-to-output',
-      from_endpoint_id: 'tonelux-otb-input',
-      to_endpoint_id: 'tonelux-otb-output',
-      mode: 'derived',
-      active: true,
-    },
-    {
-      id: 'conn-mix-b-return-to-bus',
-      from_endpoint_id: 'api-mix-b-return',
-      to_endpoint_id: 'api-mix-b-bus',
-      mode: 'derived',
-      active: true,
-    },
-    {
-      id: 'conn-mix-b-bus-to-send',
-      from_endpoint_id: 'api-mix-b-bus',
-      to_endpoint_id: 'api-mix-b-insert-send',
-      mode: 'derived',
-      active: true,
-    },
-    {
-      id: 'conn-mix-b-return-path',
+      id: 'conn-mix-b-to-pueblo-d',
       from_endpoint_id: 'api-mix-b-insert-return',
-      to_endpoint_id: 'parallel-blend-output',
-      mode: 'derived',
+      to_endpoint_id: 'pueblo-bank-d-input',
+      mode: 'normalled',
       active: true,
     },
   ];
@@ -223,6 +236,7 @@ function baseConnections(mic: Microphone | null, preamp: Preamp | null): PatchCo
 
   if (preamp) {
     connections.push(
+      // ── Preamp internal path ──
       {
         id: 'conn-preamp-internal',
         from_endpoint_id: 'preamp-input',
@@ -230,9 +244,18 @@ function baseConnections(mic: Microphone | null, preamp: Preamp | null): PatchCo
         mode: 'derived',
         active: true,
       },
+      // ── Tracking: preamp → Aurora AD (half-normal) ──
       {
-        id: 'conn-preamp-to-api',
+        id: 'conn-preamp-to-aurora',
         from_endpoint_id: 'preamp-output',
+        to_endpoint_id: 'aurora-ad-input',
+        mode: 'normalled',
+        active: true,
+      },
+      // ── Mixing chain: Tilt → API → insert → bus → Pueblo ──
+      {
+        id: 'conn-tilt-to-api',
+        from_endpoint_id: 'tilt-eq-output',
         to_endpoint_id: 'api-line-input-1',
         mode: 'normalled',
         active: true,
@@ -258,20 +281,6 @@ function baseConnections(mic: Microphone | null, preamp: Preamp | null): PatchCo
         mode: 'derived',
         active: true,
       },
-      {
-        id: 'conn-mix-a-return-to-ad',
-        from_endpoint_id: 'api-mix-a-insert-return',
-        to_endpoint_id: 'ad-plus-input-1',
-        mode: 'derived',
-        active: true,
-      },
-      {
-        id: 'conn-ad-to-daw',
-        from_endpoint_id: 'ad-plus-input-1',
-        to_endpoint_id: 'daw-destination',
-        mode: 'derived',
-        active: true,
-      }
     );
   }
 

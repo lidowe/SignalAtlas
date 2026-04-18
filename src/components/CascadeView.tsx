@@ -5,6 +5,7 @@ import { cascadeNodes, monitorSpeakers } from '../data/cascade';
 interface Props {
   mode: StudioMode;
   perspective: Perspective;
+  onInspect: (id: string | null) => void;
 }
 
 /* ── Shared primitives ─────────────────────────────────────── */
@@ -13,49 +14,45 @@ function nodeAccent(role: SummingNode['role']): string {
   switch (role) {
     case 'converter-source': return '#6366f1';
     case 'tributary-sum': return '#14b8a6';
-    case 'tributary-merge': return '#f97316';
+    case 'cascade-destination': return '#22c55e';
     case 'console': return '#ef4444';
-    case 'parallel-sum': return '#22c55e';
     case 'master-converter': return '#e879f9';
-    case 'monitor-controller': return '#14b8a6';
     default: return '#71717a';
   }
 }
 
-function roleLabel(role: SummingNode['role']): string {
+export function roleLabel(role: SummingNode['role']): string {
   switch (role) {
     case 'converter-source': return 'DA Conversion';
-    case 'tributary-sum': return 'FX Summing';
-    case 'tributary-merge': return 'Merge Point';
+    case 'tributary-sum': return 'Tributary Sum';
+    case 'cascade-destination': return 'Cascade Sum';
     case 'console': return 'Console';
-    case 'parallel-sum': return 'Parallel Sum';
     case 'master-converter': return 'AD Conversion';
-    case 'monitor-controller': return 'Monitor Controller';
     default: return role;
   }
 }
 
-function CascadeNode({ node, highlight, selected, onSelect }: { node: SummingNode; highlight?: boolean; selected?: boolean; onSelect?: (node: SummingNode) => void }) {
+function CascadeNode({ node, highlight, selected, onSelect, onInspect }: { node: SummingNode; highlight?: boolean; selected?: boolean; onSelect?: (node: SummingNode) => void; onInspect?: (id: string) => void }) {
   const accent = nodeAccent(node.role);
   return (
     <button
       type="button"
-      onClick={() => onSelect?.(node)}
-      className={`rounded-xl border px-3 py-2.5 min-w-[9rem] max-w-[14rem] text-left transition-all cursor-pointer ${highlight === false ? 'opacity-40' : ''} ${selected ? 'ring-1 ring-white/30 scale-[1.02]' : 'hover:ring-1 hover:ring-white/10'}`}
+      onClick={() => { onSelect?.(node); onInspect?.(node.id); }}
+      className={`mat-recess rounded-[3px] border px-3 py-2.5 min-w-[9rem] max-w-[14rem] text-left transition-all cursor-pointer ${highlight === false ? 'opacity-40' : ''} ${selected ? 'ring-1 ring-white/20 scale-[1.02]' : 'hover:ring-1 hover:ring-white/10'}`}
       style={{ borderColor: accent + (selected ? '80' : '35'), backgroundColor: accent + (selected ? '18' : '08') }}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="text-sm font-medium text-zinc-100 truncate">{node.name}</div>
+        <div className="text-sm font-medium truncate" style={{ color: 'var(--sa-cream)' }}>{node.name}</div>
         {node.transformer_count > 0 && (
-          <span className="text-[9px] rounded border border-orange-800/40 bg-orange-950/30 px-1.5 py-0.5 text-orange-300 whitespace-nowrap shrink-0">
+          <span className="text-[9px] rounded-[2px] border border-orange-800/25 bg-orange-950/15 px-1.5 py-0.5 whitespace-nowrap shrink-0" style={{ color: 'var(--sa-signal-active)' }}>
             {node.transformer_count} xfmr
           </span>
         )}
       </div>
       <div className="text-[10px] mt-0.5" style={{ color: accent }}>{roleLabel(node.role)}</div>
-      <div className="text-[10px] text-zinc-500 mt-1 line-clamp-2">{node.character.split('.')[0]}.</div>
+      <div className="text-[10px] mt-1 line-clamp-2" style={{ color: 'var(--sa-cream-dim)' }}>{node.character.split('.')[0]}.</div>
       {(node.max_input_dbu !== null || node.noise_floor_dbu !== null) && (
-        <div className="flex gap-2 mt-1.5 text-[9px] text-zinc-500">
+        <div className="flex gap-2 mt-1.5 text-[9px] text-zinc-600">
           {node.max_input_dbu !== null && <span>+{node.max_input_dbu} dBu max</span>}
           {node.noise_floor_dbu !== null && <span>{node.noise_floor_dbu} dBu noise</span>}
         </div>
@@ -67,11 +64,11 @@ function CascadeNode({ node, highlight, selected, onSelect }: { node: SummingNod
 function StageBox({ label, sublabel, accent, dim }: { label: string; sublabel?: string; accent: string; dim?: boolean }) {
   return (
     <div
-      className={`rounded-xl border px-3.5 py-2 text-center min-w-[5.5rem] ${dim ? 'opacity-50' : ''}`}
-      style={{ borderColor: accent + '40', backgroundColor: accent + '10' }}
+      className={`mat-recess rounded-[3px] border px-3.5 py-2 text-center min-w-[5.5rem] ${dim ? 'opacity-50' : ''}`}
+      style={{ borderColor: accent + '25', backgroundColor: accent + '08' }}
     >
-      <div className="text-sm font-medium text-zinc-100">{label}</div>
-      {sublabel && <div className="text-[10px] text-zinc-500">{sublabel}</div>}
+      <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{label}</div>
+      {sublabel && <div className="text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>{sublabel}</div>}
     </div>
   );
 }
@@ -99,7 +96,7 @@ function DomainGate({ label }: { label: string }) {
 
 /* ── Node detail drawer ────────────────────────────────────── */
 
-function nodeConsequence(node: SummingNode, perspective: Perspective): string {
+export function nodeConsequence(node: SummingNode, perspective: Perspective): string {
   const p = perspective;
   switch (node.id) {
     case 'aurora':
@@ -148,56 +145,56 @@ function NodeDetail({ node, perspective, onClose }: { node: SummingNode; perspec
 
   return (
     <div
-      className="rounded-xl border p-3.5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200"
-      style={{ borderColor: accent + '40', backgroundColor: accent + '0a' }}
+      className="mat-recess rounded-[3px] border p-3.5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200"
+      style={{ borderColor: accent + '25', backgroundColor: accent + '08' }}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-zinc-100">{node.name}</div>
-          <div className="text-[10px] text-zinc-500">{node.vendor} · {roleLabel(node.role)}</div>
+          <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{node.name}</div>
+          <div className="text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>{node.vendor} · {roleLabel(node.role)}</div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-[10px] text-zinc-600 hover:text-zinc-300 shrink-0 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40"
+          className="text-[10px] shrink-0 px-1.5 py-0.5 mat-recess rounded-[2px] hover:text-zinc-300" style={{ color: 'var(--sa-cream-dim)' }}
         >
           Close
         </button>
       </div>
 
-      <p className="text-[11.5px] leading-relaxed text-zinc-300">
+      <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
         {nodeConsequence(node, perspective)}
       </p>
 
       {/* Specs grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-[10px]">
         {node.max_input_dbu !== null && (
-          <div><span className="text-zinc-500">Max input</span> <span className="text-zinc-300 ml-1">+{node.max_input_dbu} dBu</span></div>
+          <div><span className="text-zinc-600">Max input</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>+{node.max_input_dbu} dBu</span></div>
         )}
         {node.max_output_dbu !== null && (
-          <div><span className="text-zinc-500">Max output</span> <span className="text-zinc-300 ml-1">+{node.max_output_dbu} dBu</span></div>
+          <div><span className="text-zinc-600">Max output</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>+{node.max_output_dbu} dBu</span></div>
         )}
         {node.noise_floor_dbu !== null && (
-          <div><span className="text-zinc-500">Noise floor</span> <span className="text-zinc-300 ml-1">{node.noise_floor_dbu} dBu</span></div>
+          <div><span className="text-zinc-600">Noise floor</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>{node.noise_floor_dbu} dBu</span></div>
         )}
         {node.thd_percent !== null && (
-          <div><span className="text-zinc-500">THD</span> <span className="text-zinc-300 ml-1">{node.thd_percent}%</span></div>
+          <div><span className="text-zinc-600">THD</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>{node.thd_percent}%</span></div>
         )}
         {node.dynamic_range_db !== null && (
-          <div><span className="text-zinc-500">Dynamic range</span> <span className="text-zinc-300 ml-1">{node.dynamic_range_db} dB</span></div>
+          <div><span className="text-zinc-600">Dynamic range</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>{node.dynamic_range_db} dB</span></div>
         )}
-        <div><span className="text-zinc-500">Channels</span> <span className="text-zinc-300 ml-1">{node.input_channels} in / {node.output_channels} out</span></div>
+        <div><span className="text-zinc-600">Channels</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>{node.input_channels} in / {node.output_channels} out</span></div>
         <div>
-          <span className="text-zinc-500">Iron</span>
-          <span className="text-zinc-300 ml-1">{node.transformer_count > 0 ? `${node.transformer_count} transformer${node.transformer_count > 1 ? 's' : ''}` : 'Transformerless'}</span>
+          <span className="text-zinc-600">Iron</span>
+          <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>{node.transformer_count > 0 ? `${node.transformer_count} transformer${node.transformer_count > 1 ? 's' : ''}` : 'Transformerless'}</span>
         </div>
         {node.has_insert && (
-          <div><span className="text-zinc-500">Inserts</span> <span className="text-zinc-300 ml-1">Per-channel + bus</span></div>
+          <div><span className="text-zinc-600">Inserts</span> <span className="ml-1" style={{ color: 'var(--sa-cream-dim)' }}>Per-channel + bus</span></div>
         )}
       </div>
 
       {/* Upstream / downstream context */}
-      <div className="flex flex-wrap gap-3 text-[9px] text-zinc-500">
+      <div className="flex flex-wrap gap-3 text-[9px]" style={{ color: 'var(--sa-cream-dim)' }}>
         {node.receives_from.length > 0 && (
           <div>
             <span className="text-zinc-600">Receives from:</span>{' '}
@@ -222,72 +219,73 @@ function NodeDetail({ node, perspective, onClose }: { node: SummingNode; perspec
  * what enters it and how many tributaries feed into the console.
  */
 
-function SpeakerChip({ speaker, selected, onSelect }: { speaker: MonitorSpeaker; selected?: boolean; onSelect?: () => void }) {
+function SpeakerChip({ speaker, selected, onSelect, onInspect }: { speaker: MonitorSpeaker; selected?: boolean; onSelect?: () => void; onInspect?: (id: string) => void }) {
   return (
     <button
       type="button"
-      onClick={onSelect}
-      className={`rounded-lg border px-2 py-1.5 text-left transition-all cursor-pointer min-w-[7rem] ${selected ? 'ring-1 ring-white/20 border-zinc-600' : 'border-zinc-800 hover:border-zinc-700'} bg-zinc-900/40`}
+      onClick={() => { onSelect?.(); onInspect?.(speaker.id); }}
+      className={`mat-recess rounded-[3px] border px-2 py-1.5 text-left transition-all cursor-pointer min-w-[7rem] ${selected ? 'ring-1 ring-white/20 border-zinc-600/40' : 'border-zinc-800/30 hover:border-zinc-700/40'}`}
     >
-      <div className="text-[10px] font-medium text-zinc-200">{speaker.name}</div>
-      <div className="text-[9px] text-zinc-500">{speaker.type === 'passive' ? `Passive · ${speaker.amplifier}` : 'Active'}</div>
+      <div className="text-[10px] font-medium" style={{ color: 'var(--sa-cream)' }}>{speaker.name}</div>
+      <div className="text-[9px]" style={{ color: 'var(--sa-cream-dim)' }}>{speaker.type === 'passive' ? `Passive · ${speaker.amplifier}` : 'Active'}</div>
     </button>
   );
 }
 
 function SpeakerDetail({ speaker, perspective, onClose }: { speaker: MonitorSpeaker; perspective: Perspective; onClose: () => void }) {
   return (
-    <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/40 p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+    <div className="mat-recess rounded-[3px] border border-zinc-700/20 p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-zinc-100">{speaker.name}</div>
-          <div className="text-[10px] text-zinc-500">{speaker.vendor} · {speaker.driver_config}</div>
+          <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{speaker.name}</div>
+          <div className="text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>{speaker.vendor} · {speaker.driver_config}</div>
         </div>
-        <button type="button" onClick={onClose} className="text-[10px] text-zinc-600 hover:text-zinc-300 shrink-0 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/40">Close</button>
+        <button type="button" onClick={onClose} className="text-[10px] shrink-0 px-1.5 py-0.5 mat-recess rounded-[2px] hover:text-zinc-300" style={{ color: 'var(--sa-cream-dim)' }}>Close</button>
       </div>
-      <p className="text-[11.5px] leading-relaxed text-zinc-300">
+      <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
           {perspective === 'technical' ? speaker.engineering : speaker.character}
       </p>
-      <div className="flex gap-4 text-[10px] text-zinc-500">
+      <div className="flex gap-4 text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>
         <span>{speaker.freq_range_hz[0]} Hz – {speaker.freq_range_hz[1] >= 1000 ? `${speaker.freq_range_hz[1] / 1000}k` : speaker.freq_range_hz[1]} Hz</span>
         {speaker.amplifier && <span>Amp: {speaker.amplifier}</span>}
       </div>
-      <div className="text-[10px] text-zinc-500 italic">{speaker.use_case}</div>
+      <div className="text-[10px] italic" style={{ color: 'var(--sa-cream-dim)' }}>{speaker.use_case}</div>
     </div>
   );
 }
 
-function MonitorPath({ perspective, selectedNode, onSelectNode }: { perspective: Perspective; selectedNode: SummingNode | null; onSelectNode: (node: SummingNode) => void }) {
+function MonitorPath({ perspective, selectedNode, onSelectNode, onInspect }: { perspective: Perspective; selectedNode: SummingNode | null; onSelectNode: (node: SummingNode) => void; onInspect: (id: string | null) => void }) {
+  const aurora = cascadeNodes.find(n => n.id === 'aurora')!;
   const dbox = cascadeNodes.find(n => n.id === 'dbox-sum')!;
   const [selectedSpeaker, setSelectedSpeaker] = useState<MonitorSpeaker | null>(null);
 
   return (
     <div>
-      <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-300/70 mb-2">
+      <div className="text-silkscreen text-[8px] mb-2">
         Monitor path · always active
       </div>
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         <StageBox label="DAW" sublabel="Playback output" accent="#a1a1aa" />
         <Arrow label="Thunderbolt" />
         <DomainGate label="digital" />
-        <StageBox label="Aurora(n)" sublabel="AES monitor out" accent="#6366f1" />
+        <CascadeNode node={aurora} selected={selectedNode?.id === aurora.id} onSelect={onSelectNode} onInspect={onInspect} />
         <Arrow label="AES cable" />
-        <CascadeNode node={dbox} selected={selectedNode?.id === dbox.id} onSelect={onSelectNode} />
+        <CascadeNode node={dbox} selected={selectedNode?.id === dbox.id} onSelect={onSelectNode} onInspect={onInspect} />
         <Arrow label="speaker select" />
         <div className="flex gap-1.5">
           {monitorSpeakers.map(s => (
-            <SpeakerChip key={s.id} speaker={s} selected={selectedSpeaker?.id === s.id} onSelect={() => setSelectedSpeaker(prev => prev?.id === s.id ? null : s)} />
+            <SpeakerChip key={s.id} speaker={s} selected={selectedSpeaker?.id === s.id} onSelect={() => setSelectedSpeaker(prev => prev?.id === s.id ? null : s)} onInspect={onInspect} />
           ))}
         </div>
       </div>
-      <div className="mt-2 text-[10px] text-zinc-500 leading-relaxed max-w-4xl">
+      <div className="mt-2 text-[10px] leading-relaxed max-w-4xl" style={{ color: 'var(--sa-cream-dim)' }}>
         The monitoring chain is digital from DAW to D-Box+. The DAW's output travels via Thunderbolt to the Aurora(n),
         whose main monitor outputs send AES to the D-Box+ digital input. The D-Box+ selects between five sources —
         AES is the primary path — and routes to whichever speakers are active. This chain is always running regardless of mode.
       </div>
-      {selectedNode?.id === dbox.id && (
+      {selectedNode && [aurora, dbox].some(n => n.id === selectedNode.id) && (
         <div className="mt-3">
-          <NodeDetail node={dbox} perspective={perspective} onClose={() => onSelectNode(dbox)} />
+          <NodeDetail node={selectedNode} perspective={perspective} onClose={() => onSelectNode(selectedNode)} />
         </div>
       )}
       {selectedSpeaker && (
@@ -304,7 +302,7 @@ function MonitorPath({ perspective, selectedNode, onSelectNode }: { perspective:
 function TrackingSource() {
   return (
     <div>
-      <div className="text-[9px] uppercase tracking-[0.2em] text-amber-400/70 mb-2">
+      <div className="text-silkscreen text-[8px] mb-2">
         Capture path · the DAW is the endpoint
       </div>
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -316,7 +314,7 @@ function TrackingSource() {
         <DomainGate label="▸ digital" />
         <StageBox label="DAW" sublabel="Endpoint · record" accent="#a1a1aa" />
       </div>
-      <div className="mt-1.5 text-[10px] text-zinc-600 italic leading-relaxed max-w-4xl">
+      <div className="mt-1.5 text-[10px] italic leading-relaxed max-w-4xl" style={{ color: 'var(--sa-cream-dim)' }}>
         The mic signal enters through the normalled patchbay path to the preamp, then to the Aurora for A/D conversion and into the DAW.
         The DAW is the endpoint of this chain — it records the captured signal. Its playback output feeds the monitor path above,
         so you hear the recording in real time through the D-Box+ and speakers.
@@ -325,7 +323,7 @@ function TrackingSource() {
   );
 }
 
-function MixingSource({ perspective, selectedNode, onSelectNode }: { perspective: Perspective; selectedNode: SummingNode | null; onSelectNode: (node: SummingNode) => void }) {
+function MixingSource({ perspective, selectedNode, onSelectNode, onInspect }: { perspective: Perspective; selectedNode: SummingNode | null; onSelectNode: (node: SummingNode) => void; onInspect: (id: string | null) => void }) {
   const aurora = cascadeNodes.find(n => n.id === 'aurora')!;
   const dbox = cascadeNodes.find(n => n.id === 'dbox-sum')!;
   const otb = cascadeNodes.find(n => n.id === 'otb')!;
@@ -335,45 +333,45 @@ function MixingSource({ perspective, selectedNode, onSelectNode }: { perspective
 
   return (
     <div className="space-y-4">
-      <div className="text-[9px] uppercase tracking-[0.2em] text-indigo-400/70 mb-1">
+      <div className="text-silkscreen text-[8px] mb-1">
         Mixing path · the DAW is the starting point
       </div>
 
       {/* DAW → Analog domain */}
       <div>
-        <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 mb-1">
-          <span className="inline-block w-3 h-0.5 bg-indigo-500 rounded" />
+        <div className="flex items-center gap-1.5 text-[9px] mb-1" style={{ color: 'var(--sa-cream-dim)' }}>
+          <span className="inline-block w-3 h-0.5 bg-indigo-500/60 rounded" />
           DAW stems exit through the Aurora's 24 DA outputs into the analog domain
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <StageBox label="DAW" sublabel="Starting point" accent="#a1a1aa" />
           <DomainGate label="analog ◂" />
-          <CascadeNode node={aurora} selected={selectedNode?.id === aurora.id} onSelect={onSelectNode} />
+          <CascadeNode node={aurora} selected={selectedNode?.id === aurora.id} onSelect={onSelectNode} onInspect={onInspect} />
         </div>
       </div>
 
       {/* Two routing groups */}
       <div>
-        <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 mb-1">
-          <span className="inline-block w-3 h-0.5 bg-red-500 rounded" />
+        <div className="flex items-center gap-1.5 text-[9px] mb-1" style={{ color: 'var(--sa-cream-dim)' }}>
+          <span className="inline-block w-3 h-0.5 bg-red-500/60 rounded" />
           Aurora DA 1–16 → Tilt EQs → API console · channels with inserts for outboard processing
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <StageBox label="Aurora" sublabel="DA 1–16" accent="#6366f1" />
           <Arrow label="via Tilt EQs" color="text-red-700" />
-          <CascadeNode node={api} selected={selectedNode?.id === api.id} onSelect={onSelectNode} />
+          <CascadeNode node={api} selected={selectedNode?.id === api.id} onSelect={onSelectNode} onInspect={onInspect} />
         </div>
       </div>
 
       <div>
-        <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 mb-1">
-          <span className="inline-block w-3 h-0.5 bg-orange-500 rounded" />
+        <div className="flex items-center gap-1.5 text-[9px] mb-1" style={{ color: 'var(--sa-cream-dim)' }}>
+          <span className="inline-block w-3 h-0.5 bg-orange-500/60 rounded" />
           Aurora DA 17–24 → OTB for overflow stems, merging into console ext input
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <StageBox label="Aurora" sublabel="DA 17–24" accent="#6366f1" />
           <Arrow label="8 ch" color="text-orange-700" />
-          <CascadeNode node={otb} selected={selectedNode?.id === otb.id} onSelect={onSelectNode} />
+          <CascadeNode node={otb} selected={selectedNode?.id === otb.id} onSelect={onSelectNode} onInspect={onInspect} />
           <Arrow label="TX-100 out" color="text-orange-700" />
           <StageBox label="API ext in" sublabel="Merges into console" accent="#ef4444" />
         </div>
@@ -381,17 +379,17 @@ function MixingSource({ perspective, selectedNode, onSelectNode }: { perspective
 
       {/* D-Box+ summing — general purpose */}
       <div>
-        <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 mb-1">
-          <span className="inline-block w-3 h-0.5 bg-teal-500 rounded" />
+        <div className="flex items-center gap-1.5 text-[9px] mb-1" style={{ color: 'var(--sa-cream-dim)' }}>
+          <span className="inline-block w-3 h-0.5 bg-teal-500/60 rounded" />
           D-Box+ summing — 8 general-purpose analog inputs, stereo sum output
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-          <div className="rounded-xl border border-teal-800/30 bg-teal-950/15 px-3 py-1.5 text-center shrink-0">
-            <div className="text-xs font-medium text-zinc-300">Patchable returns</div>
-            <div className="text-[9px] text-zinc-500">Varies per session</div>
+          <div className="mat-recess rounded-[3px] border border-teal-800/15 px-3 py-1.5 text-center shrink-0">
+            <div className="text-xs font-medium" style={{ color: 'var(--sa-cream)' }}>Patchable returns</div>
+            <div className="text-[9px]" style={{ color: 'var(--sa-cream-dim)' }}>Varies per session</div>
           </div>
           <Arrow label="up to 8 inputs" color="text-teal-700" />
-          <CascadeNode node={dbox} highlight selected={selectedNode?.id === dbox.id} onSelect={onSelectNode} />
+          <CascadeNode node={dbox} highlight selected={selectedNode?.id === dbox.id} onSelect={onSelectNode} onInspect={onInspect} />
           <Arrow label="sum out" color="text-teal-700" />
           <StageBox label="Processing" sublabel="Wideners, comp…" accent="#71717a" />
         </div>
@@ -399,21 +397,21 @@ function MixingSource({ perspective, selectedNode, onSelectNode }: { perspective
 
       {/* Print path */}
       <div>
-        <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 mb-1">
-          <span className="inline-block w-3 h-0.5 bg-fuchsia-500 rounded" />
+        <div className="flex items-center gap-1.5 text-[9px] mb-1" style={{ color: 'var(--sa-cream-dim)' }}>
+          <span className="inline-block w-3 h-0.5 bg-fuchsia-500/60 rounded" />
           Print path — the mix reaches AD+ for final capture back to the DAW
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <StageBox label="API Mix A" sublabel="Primary bus" accent="#ef4444" />
           <Arrow label="Mix A" color="text-fuchsia-700" />
-          <CascadeNode node={adplus} selected={selectedNode?.id === adplus.id} onSelect={onSelectNode} />
+          <CascadeNode node={adplus} selected={selectedNode?.id === adplus.id} onSelect={onSelectNode} onInspect={onInspect} />
           <DomainGate label="▸ digital" />
           <StageBox label="DAW" sublabel="Print track" accent="#a1a1aa" />
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto mt-1.5 pb-1 ml-4">
           <StageBox label="API Mix B" sublabel="Alternate bus" accent="#ef4444" />
           <Arrow label="Mix B" color="text-green-700" />
-          <CascadeNode node={pueblo} selected={selectedNode?.id === pueblo.id} onSelect={onSelectNode} />
+          <CascadeNode node={pueblo} selected={selectedNode?.id === pueblo.id} onSelect={onSelectNode} onInspect={onInspect} />
           <Arrow label="Bank D hardwired" dashed color="text-green-700" />
           <StageBox label="AD+ input B" sublabel="Bypasses API iron" accent="#e879f9" />
         </div>
@@ -433,10 +431,10 @@ function MixingSource({ perspective, selectedNode, onSelectNode }: { perspective
 function PrintTail() {
   return (
     <div>
-      <div className="text-[9px] uppercase tracking-[0.2em] text-fuchsia-400/70 mb-2">
+      <div className="text-silkscreen text-[8px] mb-2">
         Print return · final capture
       </div>
-      <div className="mt-1.5 text-[10px] text-zinc-500 leading-relaxed max-w-4xl">
+      <div className="mt-1.5 text-[10px] leading-relaxed max-w-4xl" style={{ color: 'var(--sa-cream-dim)' }}>
         In mixing, the AD+ converts the final analog result back to digital. Its AES output returns to the Aurora for capture into a DAW print track.
         What you hear through the monitor path and what gets printed are independent — the D-Box+ can switch between AES (DAW playback) and SUM
         (the analog summing bus) to compare the printed result against the live analog sum.
@@ -449,15 +447,15 @@ function PrintTail() {
 
 function GainStagingNote() {
   return (
-    <div className="rounded-lg border border-zinc-700/25 bg-zinc-900/30 px-3 py-2 text-[10px] text-zinc-400">
-      <span className="font-medium text-zinc-300">Gain staging:</span> API can reach +28 dBu; AD+ accepts up to +24 dBu. The 4 dB difference is managed by converter calibration and mix-bus level — the mixer's job is to stage gain so the signal stays well within the converter's operating range.
+    <div className="mat-recess rounded-[3px] px-3 py-2 text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>
+      <span className="font-medium" style={{ color: 'var(--sa-cream)' }}>Gain staging:</span> API can reach +28 dBu; AD+ accepts up to +24 dBu. The 4 dB difference is managed by converter calibration and mix-bus level — the mixer's job is to stage gain so the signal stays well within the converter's operating range.
     </div>
   );
 }
 
 /* ── Main Component ────────────────────────────────────────── */
 
-export default function CascadeView({ mode, perspective }: Props) {
+export default function CascadeView({ mode, perspective, onInspect }: Props) {
   const [selectedNode, setSelectedNode] = useState<SummingNode | null>(null);
 
   const handleSelectNode = (node: SummingNode) => {
@@ -465,12 +463,18 @@ export default function CascadeView({ mode, perspective }: Props) {
   };
 
   return (
-    <section className="mt-4 overflow-hidden rounded-[1.7rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(16,18,21,0.98),rgba(8,10,12,0.98))]">
-      <div className="border-b border-zinc-800 px-4 py-3">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+    <section
+      className="mt-4 overflow-hidden mat-brushed-mid mat-rack-panel rounded-[3px] border transition-colors duration-500"
+      style={{ borderColor: `color-mix(in srgb, var(--sa-mode-accent, rgba(113,113,122,0.25)) 40%, rgba(113,113,122,0.25))` }}
+    >
+      <div
+        className="border-b border-zinc-800/30 px-4 py-3"
+        style={{ background: `linear-gradient(180deg, var(--sa-mode-tint, transparent) 0%, transparent 100%)` }}
+      >
+        <div className="text-silkscreen text-[8px]">
           Studio signal flow
         </div>
-        <div className="mt-1 text-sm text-zinc-100">
+        <div className="mt-1 text-sm" style={{ color: 'var(--sa-cream)' }}>
           The DAW {mode === 'tracking'
             ? 'is the endpoint — it records the captured signal, and its playback feeds the monitor path.'
             : 'is the starting point — its stems exit into the analog domain for summing, processing, and printing.'}
@@ -479,19 +483,19 @@ export default function CascadeView({ mode, perspective }: Props) {
 
       <div className="space-y-6 px-3 py-4">
         {/* 1. The constant — always first, always visible */}
-        <MonitorPath perspective={perspective} selectedNode={selectedNode} onSelectNode={handleSelectNode} />
+        <MonitorPath perspective={perspective} selectedNode={selectedNode} onSelectNode={handleSelectNode} onInspect={onInspect} />
 
         {/* 2. Divider */}
-        <div className="border-t border-zinc-800/60" />
+        <div className="border-t border-zinc-800/30" />
 
         {/* 3. What feeds it — this is the only part that changes by mode */}
         {mode === 'tracking'
           ? <TrackingSource />
-          : <MixingSource perspective={perspective} selectedNode={selectedNode} onSelectNode={handleSelectNode} />}
+          : <MixingSource perspective={perspective} selectedNode={selectedNode} onSelectNode={handleSelectNode} onInspect={onInspect} />}
 
         {/* 4. Divider + print note (mixing only) */}
         {mode === 'mixing' && <>
-          <div className="border-t border-zinc-800/60" />
+          <div className="border-t border-zinc-800/30" />
           <PrintTail />
         </>}
 

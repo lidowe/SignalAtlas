@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type {
   ChainAnalysis,
   InsertProcessor,
@@ -182,12 +182,6 @@ function technicalNarrative(mic: Microphone, pre: Preamp, inserts: InsertProcess
   return lines;
 }
 
-// ── Chain summary line ──
-function chainSummary(mic: Microphone, pre: Preamp, inserts: InsertProcessor[]): string {
-  const parts = [mic.name, pre.name, ...inserts.map(p => p.item.name)];
-  return parts.join(' → ');
-}
-
 function parallelSummary(parallelChain: ParallelProcessor[]): string | null {
   if (parallelChain.length === 0) return null;
   return parallelChain.map((proc) => `${proc.item.name} via ${proc.routing.return_destination_label}`).join(' + ');
@@ -237,6 +231,8 @@ function directionalOverview(
 export default function AnalysisPanel({
   perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
 }: Props) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [expanded, setExpanded] = useState(true);
   const [showRouteNotes, setShowRouteNotes] = useState(false);
   const [showNarrativeDetails, setShowNarrativeDetails] = useState(false);
   const hasRouteNotes =
@@ -252,10 +248,10 @@ export default function AnalysisPanel({
         ? 'The summing and print path is standing by below.'
         : 'Choose a microphone to begin building a capture path.';
       return (
-        <div className="border-t border-zinc-800 bg-zinc-950/72 px-3 py-2.5 sm:px-4 backdrop-blur">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 space-y-1.5">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Listening through</div>
-            <div className="text-[11px] text-zinc-400 leading-relaxed">
+        <div className="mat-brushed-dark border-t border-zinc-800/20 px-3 py-2.5 sm:px-4">
+          <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-2.5 space-y-1.5">
+            <div className="text-silkscreen-faint text-[8px]">Listening through</div>
+            <div className="text-[11px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
               DAW → Thunderbolt → Aurora(n) → AES → D-Box+ → Speakers.{' '}
               <span className="text-zinc-500">The monitor path is digital from DAW to D-Box+. {prompt}</span>
             </div>
@@ -265,11 +261,11 @@ export default function AnalysisPanel({
     }
 
     return (
-      <div className="border-t border-zinc-800 bg-zinc-950/72 px-3 py-2 sm:px-4 backdrop-blur">
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+      <div className="mat-brushed-dark border-t border-zinc-800/20 px-3 py-2 sm:px-4">
+        <div className="flex items-center justify-between gap-3 mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-2">
           <div className="min-w-0 space-y-1">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Building route</div>
-            <div className="truncate text-[11px] text-zinc-300">{overview}</div>
+            <div className="text-silkscreen-faint text-[8px]">Building route</div>
+            <div className="truncate text-[11px]" style={{ color: 'var(--sa-cream-dim)' }}>{overview}</div>
             {selectedMic && !selectedPreamp && (
               <div className="text-[10px] text-zinc-500 leading-relaxed">
                 {selectedMic.character.split('.')[0]}. Choose a preamp to complete the gain stage.
@@ -277,7 +273,7 @@ export default function AnalysisPanel({
             )}
           </div>
           {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
-            <button onClick={onClearChain} className="shrink-0 rounded-full border border-zinc-800 px-2.5 py-1 text-[10px] text-zinc-500 hover:text-zinc-300">
+            <button onClick={onClearChain} className="shrink-0 mat-recess rounded-[3px] border border-zinc-800/20 px-2.5 py-1 text-silkscreen-faint text-[8px] hover:text-zinc-300">
               Clear
             </button>
           )}
@@ -301,38 +297,40 @@ export default function AnalysisPanel({
   };
 
   const perspectiveAccents: Record<Perspective, string> = {
-    musician: 'border-amber-700/30 bg-amber-950/20',
-    engineer: 'border-blue-700/30 bg-blue-950/20',
-    technical: 'border-emerald-700/30 bg-emerald-950/20',
+    musician: 'border-emerald-700/30 bg-emerald-950/12',
+    engineer: 'border-red-700/30 bg-red-950/12',
+    technical: 'border-amber-700/30 bg-amber-950/12',
   };
 
   const textAccents: Record<Perspective, string> = {
-    musician: 'text-amber-300',
-    engineer: 'text-blue-300',
-    technical: 'text-emerald-300',
+    musician: 'text-emerald-300',
+    engineer: 'text-red-300',
+    technical: 'text-amber-300',
   };
 
   const parallelLines = parallelNarrative(perspective, parallelChain);
   const parallelPathSummary = parallelSummary(parallelChain);
 
   return (
-    <div className="border-t border-zinc-800 bg-zinc-950/72 px-3 py-3 space-y-2.5 max-h-[46vh] overflow-y-auto backdrop-blur sm:max-h-64 sm:px-4">
-      {/* Chain header + clear */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className="min-w-0 flex items-center gap-2 overflow-hidden">
-          <div className={`text-[10px] font-medium uppercase tracking-[0.22em] shrink-0 ${textAccents[perspective]}`}>{perspectiveLabels[perspective]}</div>
-          <div className="hidden truncate text-[11px] font-mono text-zinc-500 sm:block">{chainSummary(selectedMic, selectedPreamp, insertChain)}</div>
-        </div>
-        <button onClick={onClearChain} className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-full px-2.5 py-1 shrink-0">
-          Clear
-        </button>
-      </div>
+    <div ref={panelRef} className="mat-brushed-dark border-t border-zinc-800/20">
+      {/* Compact summary bar — always visible */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-3 px-3 py-2 sm:px-4 text-left hover:bg-zinc-800/10 transition-colors"
+      >
+        <div className={`text-[10px] font-medium uppercase tracking-[0.22em] shrink-0 ${textAccents[perspective]}`}>{perspectiveLabels[perspective]}</div>
+        <div className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">{routeSummary.headline}</div>
+        <svg className={`shrink-0 w-3 h-3 text-zinc-500 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="2,4 6,8 10,4" /></svg>
+      </button>
 
-      {/* Path headline + gain margin */}
-      <div className="text-xs text-zinc-300 break-words leading-relaxed">{routeSummary.headline}</div>
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2.5 max-h-[36vh] overflow-y-auto sm:max-h-52 sm:px-4">
+      {/* Gain margin + viability */}
       {routeSummary.gain_margin_summary && <div className="text-[11px] text-zinc-400">{routeSummary.gain_margin_summary}</div>}
       {routeSummary.viability_flag.level === 'caution' && (
-        <div className="rounded-lg border px-2.5 py-1.5 text-[11px] text-yellow-300 border-yellow-800/40 bg-yellow-950/20">
+        <div className="mat-recess rounded-[3px] border px-2.5 py-1.5 text-[11px] text-yellow-300 border-yellow-800/20">
           {routeSummary.viability_flag.reason}
         </div>
       )}
@@ -340,19 +338,19 @@ export default function AnalysisPanel({
       {parallelPathSummary && <div className="text-[11px] text-cyan-300/90">Parallel: {parallelPathSummary}</div>}
 
       {/* Perspective narrative */}
-      <div className={`rounded-xl border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">First reading</div>
+      <div className={`mat-recess rounded-[3px] border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>
+          <div className="text-silkscreen-faint text-[8px]">First reading</div>
           <p className={`text-sm leading-relaxed ${textAccents[perspective]}`}>{leadNarrative}</p>
           <p className="text-[11px] leading-relaxed text-zinc-400">{perspectiveInsight.summary}</p>
           {parallelLines.length > 0 && (
-            <div className="rounded-lg border border-cyan-800/30 bg-cyan-950/20 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-100/90">
+            <div className="mat-recess rounded-[3px] border border-cyan-800/20 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-100/90">
               {parallelLines[0]}
             </div>
           )}
           {(supportingNarrative.length > 0 || parallelLines.length > 1) && (
             <button
               onClick={() => setShowNarrativeDetails((value) => !value)}
-              className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-full px-2.5 py-1 bg-zinc-900/40"
+              className="text-silkscreen-faint text-[8px] hover:text-zinc-300 mat-recess border border-zinc-800/20 rounded-[3px] px-2.5 py-1"
             >
               {showNarrativeDetails ? 'Less detail' : 'More detail'}
             </button>
@@ -360,7 +358,7 @@ export default function AnalysisPanel({
         </div>
 
       {showNarrativeDetails && (supportingNarrative.length > 0 || parallelLines.length > 1) && (
-        <div className={`rounded-xl border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>
+        <div className={`mat-recess rounded-[3px] border p-3 space-y-2 ${perspectiveAccents[perspective]}`}>
           {supportingNarrative.map((line, i) => (
             <p key={i} className="text-sm leading-relaxed text-zinc-300">{line}</p>
           ))}
@@ -374,7 +372,7 @@ export default function AnalysisPanel({
         <div>
           <button
             onClick={() => setShowRouteNotes((value) => !value)}
-            className="text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-full px-2.5 py-1 bg-zinc-900/40"
+            className="text-silkscreen-faint text-[8px] hover:text-zinc-300 mat-recess border border-zinc-800/20 rounded-[3px] px-2.5 py-1"
           >
             {showRouteNotes ? 'Hide route trace' : 'Show route trace'}
           </button>
@@ -382,13 +380,13 @@ export default function AnalysisPanel({
       )}
 
       {showRouteNotes && hasRouteNotes && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3 space-y-2">
+        <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-3 space-y-2">
             {routeSummary.active_path.length > 0 && (
               <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
                 {routeSummary.active_path.map((stage, index) => (
                   <span key={stage.id} className="contents">
                     {index > 0 && <span className="text-zinc-600">→</span>}
-                    <span className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5">{stage.label}</span>
+                    <span className="rounded-[2px] border border-zinc-800/20 mat-recess px-1.5 py-0.5">{stage.label}</span>
                   </span>
                 ))}
               </div>
@@ -401,7 +399,7 @@ export default function AnalysisPanel({
                     {path.map((stage, stageIndex) => (
                       <span key={stage.id} className="contents">
                         {stageIndex > 0 && <span className="text-cyan-700">→</span>}
-                        <span className="rounded border border-cyan-900/50 bg-cyan-950/20 px-1.5 py-0.5">{stage.label}</span>
+                        <span className="rounded-[2px] border border-cyan-900/30 mat-recess px-1.5 py-0.5">{stage.label}</span>
                       </span>
                     ))}
                   </div>
@@ -427,7 +425,7 @@ export default function AnalysisPanel({
             {routeSummary.available_next_actions.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {routeSummary.available_next_actions.slice(0, 3).map((action) => (
-                  <span key={action} className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400">{action}</span>
+                  <span key={action} className="text-[9px] px-1.5 py-0.5 rounded-[2px] border border-zinc-800/20 mat-recess text-zinc-400">{action}</span>
                 ))}
               </div>
             )}
@@ -437,10 +435,16 @@ export default function AnalysisPanel({
       {analysis.warnings.length > 0 && perspective !== 'technical' && (
         <div className="space-y-1">
           {analysis.warnings.map((w, i) => (
-            <div key={i} className="text-[11px] text-yellow-300 bg-yellow-900/15 border border-yellow-700/25 rounded-lg px-2.5 py-2">
+            <div key={i} className="text-[11px] text-yellow-300 mat-recess border border-yellow-700/15 rounded-[3px] px-2.5 py-2">
               ⚠ {w}
             </div>
           ))}
+        </div>
+      )}
+
+      <button onClick={onClearChain} className="text-silkscreen-faint text-[8px] hover:text-zinc-300 mat-recess border border-zinc-800/20 rounded-[3px] px-2.5 py-1 shrink-0">
+        Clear chain
+      </button>
         </div>
       )}
     </div>

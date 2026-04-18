@@ -29,6 +29,17 @@ interface PointRect {
   position: string;
 }
 
+// ── Signal domain for color coding ──
+type SignalLevel = 'mic' | 'line' | 'digital';
+
+const LEVEL_COLORS: Record<SignalLevel, string> = {
+  mic: '#e8724a',     // warm red-orange — mic-level signal
+  line: '#34d399',    // will be overridden by lens accent
+  digital: '#60a5fa', // blue-400 — digital domain
+};
+
+// ── Path geometry helpers ──
+
 /** Build a smooth bezier path from waypoints */
 function buildBezier(pts: Array<{ x: number; y: number }>): string | null {
   if (pts.length < 2) return null;
@@ -42,19 +53,24 @@ function buildBezier(pts: Array<{ x: number; y: number }>): string | null {
   return parts.join(' ');
 }
 
-/** Average position of a set of measured circles */
-function centroid(pts: PointRect[]): { x: number; y: number } | null {
+/** First point only (for mono signals — use leftmost / first channel) */
+function firstPoint(pts: PointRect[]): { x: number; y: number } | null {
   if (pts.length === 0) return null;
-  return {
-    x: pts.reduce((s, p) => s + p.cx, 0) / pts.length,
-    y: pts.reduce((s, p) => s + p.cy, 0) / pts.length,
-  };
+  const sorted = [...pts].sort((a, b) => a.cx - b.cx);
+  return { x: sorted[0].cx, y: sorted[0].cy };
 }
 
 // ── Default monitor path row order (always visible) ──
 const MONITOR_ROWS = ['row-api-mix', 'row-pueblo', 'row-ad-daw'];
 const TRACKING_ROWS = ['row-mic-ties', 'row-preamp-in', 'row-dynamics', 'row-eq', 'row-ad-daw'];
 const MIXING_ROWS = ['row-preamp-out', 'row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw'];
+
+// ── Segment: a path fragment with its own signal level + lane count ──
+interface PathSegment {
+  d: string;
+  level: SignalLevel;
+  stereo: boolean;
+}
 
 export default function SignalFlowOverlay({
   containerRef,
@@ -144,10 +160,14 @@ export default function SignalFlowOverlay({
   const lensAccent = perspective === 'musician'
     ? '#34d399'
     : perspective === 'engineer'
-      ? '#fb7185'
-      : '#f59e0b';
+      ? '#f87171'
+      : '#fbbf24';
 
-  // ── 1. Always-visible monitor path (bottom rows) ──
+  // Override line-level color with lens accent
+  const levelColor = (level: SignalLevel) =>
+    level === 'line' ? lensAccent : LEVEL_COLORS[level];
+
+  // ── 1. Always-visible monitor path (bottom rows) — stereo ──
   const monitorWaypoints: Array<{ x: number; y: number }> = [];
   for (const rowId of MONITOR_ROWS) {
     const row = rows.get(rowId);
@@ -155,50 +175,106 @@ export default function SignalFlowOverlay({
   }
   const monitorPathD = buildBezier(monitorWaypoints);
 
-  // ── 2. Active selection line (from user's circles and mode defaults) ──
-  const selectionWaypoints: Array<{ x: number; y: number }> = [];
-  const activeRows = mode === 'mixing' ? MIXING_ROWS : TRACKING_ROWS;
+  // ── 2. Active selection segments (level-colored, mono/stereo aware) ──
+  const segments: PathSegment[] = [];
+  const selectionDots: Array<{ x: number; y: number; level: SignalLevel }> = [];
 
   if (mode === 'mixing') {
-    activeRows.forEach((rowId) => {
+    // Mixing mode: full stereo line-level path through row centers
+    const mixPts: Array<{ x: number; y: number }> = [];
+    MIXING_ROWS.forEach((rowId) => {
       const row = rows.get(rowId);
-      if (row) selectionWaypoints.push({ x: row.centerX, y: row.centerY });
+      if (row) mixPts.push({ x: row.centerX, y: row.centerY });
     });
+    const d = buildBezier(mixPts);
+    if (d) segments.push({ d, level: 'line', stereo: true });
+    mixPts.forEach(pt => selectionDots.push({ ...pt, level: 'line' }));
   } else {
-    const micPts = points.filter(p => p.rowId === 'row-mic-ties' && p.position === 'top');
-    const mic = centroid(micPts);
-    if (mic) selectionWaypoints.push(mic);
+    // ── Tracking mode: clean vertical spine through row centers ──
+    // The line anchors at the mic position in the locker, then drops
+    // straight through the centers of each committed row.
 
-    const preampBottom = points.filter(p => p.rowId === 'row-mic-ties' && p.position === 'bottom');
-    const preBot = centroid(preampBottom);
-    if (preBot) selectionWaypoints.push(preBot);
+    const micPts = points.filter(p => p.rowId === 'row-mics');
+    const micPoint = firstPoint(micPts);
 
-    const preampTop = points.filter(p => p.rowId === 'row-preamp-in' && p.position === 'top');
-    const preTop = centroid(preampTop);
-    if (preTop) selectionWaypoints.push(preTop);
+    // Determine which rows are committed (have a selection)
+    const hasDynamics = insertChain.some(p => p.type === 'compressor');
+    const hasEq = insertChain.some(p => p.type === 'equalizer' || p.type === 'preamp-eq' || p.type === 'outboard');
 
-    const dynPts = points.filter(p => p.rowId === 'row-dynamics');
-    const dyn = centroid(dynPts);
-    if (dyn) selectionWaypoints.push(dyn);
+    if (micPoint && selectedPreamp) {
+      // ── Mic-level segment: mic → tie-line row center → preamp-input row center ──
+      const tieRow = rows.get('row-mic-ties');
+      const preRow = rows.get('row-preamp-in') ?? tieRow;
+      const spineX = micPoint.x; // anchor X from mic position
 
-    const eqPts = points.filter(p => p.rowId === 'row-eq');
-    const eq = centroid(eqPts);
-    if (eq) selectionWaypoints.push(eq);
+      const micLevelPts: Array<{ x: number; y: number }> = [micPoint];
+      selectionDots.push({ ...micPoint, level: 'mic' });
+
+      if (tieRow) {
+        micLevelPts.push({ x: spineX, y: tieRow.centerY });
+        selectionDots.push({ x: spineX, y: tieRow.centerY, level: 'mic' });
+      }
+      if (preRow && preRow !== tieRow) {
+        micLevelPts.push({ x: spineX, y: preRow.centerY });
+        selectionDots.push({ x: spineX, y: preRow.centerY, level: 'mic' });
+      }
+
+      const micD = buildBezier(micLevelPts);
+      if (micD) segments.push({ d: micD, level: 'mic', stereo: false });
+
+      // ── Line-level segment: from preamp row center through committed inserts ──
+      const lastMicPt = micLevelPts[micLevelPts.length - 1];
+      const lineLevelPts: Array<{ x: number; y: number }> = [lastMicPt];
+
+      if (hasDynamics) {
+        const dynRow = rows.get('row-dynamics');
+        if (dynRow) {
+          lineLevelPts.push({ x: spineX, y: dynRow.centerY });
+          selectionDots.push({ x: spineX, y: dynRow.centerY, level: 'line' });
+        }
+      }
+
+      if (hasEq) {
+        const eqRow = rows.get('row-eq');
+        if (eqRow) {
+          lineLevelPts.push({ x: spineX, y: eqRow.centerY });
+          selectionDots.push({ x: spineX, y: eqRow.centerY, level: 'line' });
+        }
+      }
+
+      if (lineLevelPts.length > 1) {
+        const lineD = buildBezier(lineLevelPts);
+        if (lineD) segments.push({ d: lineD, level: 'line', stereo: false });
+      }
+
+    } else if (micPoint) {
+      // Mic only — dot + anticipatory continuation
+      selectionDots.push({ ...micPoint, level: 'mic' });
+    }
   }
 
-  const selectionPathD = buildBezier(selectionWaypoints);
-
-  // ── 3. Continuation: from last selection through remaining default rows to end ──
-  const lastSel = selectionWaypoints[selectionWaypoints.length - 1];
+  // ── 3. Continuation / anticipatory lines ──
+  const lastDot = selectionDots[selectionDots.length - 1];
   let continuationD: string | null = null;
+  let continuationEndDot = false;
 
-  if (lastSel && selectionWaypoints.length >= 1) {
-    const contPts: Array<{ x: number; y: number }> = [lastSel];
-    // Walk the active mode rows that come after the last selected Y position
+  if (mode !== 'mixing' && selectedMic && !selectedPreamp && lastDot) {
+    const micTiesRow = rows.get('row-mic-ties');
+    if (micTiesRow) {
+      continuationD = buildBezier([
+        { x: lastDot.x, y: lastDot.y },
+        { x: micTiesRow.centerX, y: micTiesRow.centerY },
+        { x: micTiesRow.centerX, y: micTiesRow.bottom - 14 },
+      ]);
+      continuationEndDot = true;
+    }
+  } else if (lastDot && selectionDots.length >= 2) {
+    const activeRows = mode === 'mixing' ? MIXING_ROWS : TRACKING_ROWS;
+    const contPts: Array<{ x: number; y: number }> = [{ x: lastDot.x, y: lastDot.y }];
     for (const rowId of activeRows) {
       const row = rows.get(rowId);
-      if (row && row.centerY > lastSel.y + 10) {
-        contPts.push({ x: row.centerX, y: row.centerY });
+      if (row && row.centerY > lastDot.y + 40) {
+        contPts.push({ x: lastDot.x, y: row.centerY });
       }
     }
     if (contPts.length >= 2) {
@@ -206,8 +282,43 @@ export default function SignalFlowOverlay({
     }
   }
 
-  // ── Arrow marker ──
+  // ── Arrow markers ──
   const arrowId = 'signal-arrow';
+
+  // ── 4. Viable return-path dotted lines ──
+  const hasOutboard = insertChain.length > 0 || parallelChain.length > 0;
+  const showReturnPaths = mode === 'mixing' ? hasOutboard : selectedPreamp != null;
+  const returnPathDefs: Array<{ d: string; key: string }> = [];
+
+  if (showReturnPaths) {
+    const branchRow = hasOutboard ? rows.get('row-eq') : rows.get('row-preamp-in');
+    const returnTargets = mode === 'mixing'
+      ? ['row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw']
+      : ['row-dynamics', 'row-eq', 'row-ad-daw'];
+
+    if (branchRow) {
+      for (const targetId of returnTargets) {
+        const target = rows.get(targetId);
+        if (target && target.centerY > branchRow.centerY + 10) {
+          const d = buildBezier([
+            { x: branchRow.centerX + 24, y: branchRow.bottom - 6 },
+            { x: target.centerX + 24, y: target.centerY },
+          ]);
+          if (d) returnPathDefs.push({ d, key: `return-${targetId}` });
+        }
+      }
+    }
+  }
+
+  // ── Stereo offset helper: duplicate a path slightly left and right ──
+  function stereoGroup(d: string, color: string, opacity: number, width: number) {
+    return (
+      <g>
+        <path d={d} fill="none" stroke={color} strokeWidth={width} strokeOpacity={opacity} strokeLinecap="round" transform="translate(-3, 0)" />
+        <path d={d} fill="none" stroke={color} strokeWidth={width} strokeOpacity={opacity} strokeLinecap="round" transform="translate(3, 0)" />
+      </g>
+    );
+  }
 
   return (
     <svg
@@ -221,39 +332,69 @@ export default function SignalFlowOverlay({
         <marker id={arrowId} markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
           <polygon points="0 0, 6 2.5, 0 5" fill={lensAccent} fillOpacity="0.78" />
         </marker>
+        <marker id="mic-arrow" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
+          <polygon points="0 0, 6 2.5, 0 5" fill={LEVEL_COLORS.mic} fillOpacity="0.78" />
+        </marker>
         <marker id="monitor-arrow" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
           <polygon points="0 0, 6 2.5, 0 5" fill="#a1a1aa" fillOpacity="0.4" />
         </marker>
+        <marker id="return-arrow" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
+          <polygon points="0 0, 5 2, 0 4" fill="#a1a1aa" fillOpacity="0.18" />
+        </marker>
+        <marker id="suggest-dot" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <circle cx="4" cy="4" r="3.5" fill="#a1a1aa" fillOpacity="0.45" stroke="#a1a1aa" strokeWidth="0.5" strokeOpacity="0.2" />
+        </marker>
       </defs>
 
-      {/* Monitor path — always visible, muted */}
+      {/* Return-path viability */}
+      {returnPathDefs.map(({ d, key }) => (
+        <path key={key} d={d} fill="none" stroke="#a1a1aa" strokeWidth={1} strokeOpacity={0.12} strokeDasharray="3 5" strokeLinecap="round" markerEnd="url(#return-arrow)" />
+      ))}
+
+      {/* Monitor path — always visible, muted, stereo */}
       {monitorPathD && (
         <g>
-          <path d={monitorPathD} fill="none" stroke="#a1a1aa" strokeWidth={5} strokeOpacity={0.06} strokeLinecap="round" />
-          <path d={monitorPathD} fill="none" stroke="#a1a1aa" strokeWidth={1.5} strokeOpacity={0.22} strokeDasharray="6 4" strokeLinecap="round" markerEnd="url(#monitor-arrow)" />
+          {stereoGroup(monitorPathD, '#a1a1aa', 0.05, 4)}
+          <path d={monitorPathD} fill="none" stroke="#a1a1aa" strokeWidth={1.5} strokeOpacity={0.22} strokeDasharray="6 4" strokeLinecap="round" markerEnd="url(#monitor-arrow)" transform="translate(-3, 0)" />
+          <path d={monitorPathD} fill="none" stroke="#a1a1aa" strokeWidth={1.5} strokeOpacity={0.22} strokeDasharray="6 4" strokeLinecap="round" markerEnd="url(#monitor-arrow)" transform="translate(3, 0)" />
         </g>
       )}
 
-      {/* Continuation from last selection to end — dashed default path */}
+      {/* Continuation — dashed default path */}
       {continuationD && (
         <g>
           <path d={continuationD} fill="none" stroke="#a1a1aa" strokeWidth={4} strokeOpacity={0.06} strokeDasharray="6 4" strokeLinecap="round" />
-          <path d={continuationD} fill="none" stroke="#a1a1aa" strokeWidth={1.5} strokeOpacity={0.28} strokeDasharray="6 4" strokeLinecap="round" markerEnd="url(#monitor-arrow)" />
+          <path d={continuationD} fill="none" stroke="#a1a1aa" strokeWidth={1.5} strokeOpacity={0.28} strokeDasharray="6 4" strokeLinecap="round" markerEnd={continuationEndDot ? 'url(#suggest-dot)' : 'url(#monitor-arrow)'} />
         </g>
       )}
 
-      {/* Active selection line — solid, directional, bright */}
-      {selectionPathD && (
-        <g>
-          <path d={selectionPathD} fill="none" stroke={lensAccent} strokeWidth={6} strokeOpacity={0.12} strokeLinecap="round" />
-          <path d={selectionPathD} fill="none" stroke={lensAccent} strokeWidth={2.5} strokeOpacity={0.92} strokeLinecap="round" markerEnd={`url(#${arrowId})`} />
-        </g>
-      )}
+      {/* Active selection segments — level-colored, mono or stereo */}
+      {segments.map((seg, i) => {
+        const color = levelColor(seg.level);
+        const markerId = seg.level === 'mic' ? 'mic-arrow' : arrowId;
+        const isLast = i === segments.length - 1;
+
+        return seg.stereo ? (
+          <g key={`seg-${i}`}>
+            {stereoGroup(seg.d, color, 0.1, 5)}
+            <path d={seg.d} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.88} strokeLinecap="round" transform="translate(-3, 0)" markerEnd={isLast ? `url(#${markerId})` : undefined} />
+            <path d={seg.d} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.88} strokeLinecap="round" transform="translate(3, 0)" markerEnd={isLast ? `url(#${markerId})` : undefined} />
+          </g>
+        ) : (
+          <g key={`seg-${i}`}>
+            <path d={seg.d} fill="none" stroke={color} strokeWidth={6} strokeOpacity={0.1} strokeLinecap="round" />
+            <path d={seg.d} fill="none" stroke={color} strokeWidth={2.5} strokeOpacity={0.92} strokeLinecap="round" markerEnd={isLast ? `url(#${markerId})` : undefined} />
+          </g>
+        );
+      })}
 
       {/* Selection point dots */}
-      {selectionWaypoints.map((pt, i) => (
-        <circle key={`sel-${i}`} cx={pt.x} cy={pt.y} r={4} fill={lensAccent} fillOpacity={0.9} stroke={lensAccent} strokeWidth={1} strokeOpacity={0.3} />
-      ))}
+      {selectionDots.map((pt, i) => {
+        const color = levelColor(pt.level);
+        return (
+          <circle key={`dot-${i}`} cx={pt.x} cy={pt.y} r={4} fill={color} fillOpacity={0.9} stroke={color} strokeWidth={1} strokeOpacity={0.3} />
+        );
+      })}
     </svg>
   );
 }

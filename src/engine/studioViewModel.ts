@@ -79,9 +79,9 @@ function buildParallelPaths(parallelProcessors: ParallelProcessor[]): RouteStage
       id: `parallel-return-${index}`,
       label: processor.routing.return_destination_label,
       type: 'insert-chain',
-      detail: processor.routing.blend_stage === 'tonelux-otb'
-        ? 'Aggregated and blended back through Tonelux OTB → Mix B'
-        : 'Returned directly to a blend destination',
+      detail: processor.routing.blend_stage === 'direct-return'
+        ? 'Returned directly to a blend destination'
+        : 'Summed through the Pueblo open bus before rejoining the mix path',
     },
   ]));
 }

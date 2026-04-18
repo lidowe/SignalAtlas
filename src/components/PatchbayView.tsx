@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import type {
+  BayTone,
   ChainAnalysis,
   Equalizer,
   InsertProcessor,
@@ -17,6 +18,7 @@ import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
 import SignalFlowOverlay from './SignalFlowOverlay';
+import MicLocker from './MicLocker';
 
 const CascadeView = lazy(() => import('./CascadeView'));
 
@@ -41,7 +43,6 @@ interface Props {
   outboardProcessors: OutboardProcessor[];
 }
 
-type BayTone = 'rose' | 'red' | 'orange' | 'amber' | 'yellow' | 'lime' | 'green' | 'teal' | 'cyan' | 'sky' | 'blue' | 'violet' | 'purple' | 'slate';
 type BayNormalMode = 'full-normal' | 'half-normal' | 'patch-only';
 
 interface BaySegment {
@@ -72,44 +73,55 @@ interface SegmentButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BAY_ROW_LENGTH = 48;
 
-const bayToneClasses: Record<BayTone, { strip: string; socket: string; selected: string; ring: string }> = {
-  rose: { strip: 'bg-rose-300/18 text-rose-100', socket: 'border-rose-400/45 text-rose-200', selected: 'border-rose-300 bg-rose-300 text-zinc-950', ring: 'ring-rose-300/30' },
-  red: { strip: 'bg-red-300/18 text-red-100', socket: 'border-red-400/45 text-red-200', selected: 'border-red-300 bg-red-300 text-zinc-950', ring: 'ring-red-300/30' },
-  orange: { strip: 'bg-orange-300/18 text-orange-100', socket: 'border-orange-400/45 text-orange-200', selected: 'border-orange-300 bg-orange-300 text-zinc-950', ring: 'ring-orange-300/30' },
-  amber: { strip: 'bg-amber-300/18 text-amber-100', socket: 'border-amber-400/45 text-amber-200', selected: 'border-amber-300 bg-amber-300 text-zinc-950', ring: 'ring-amber-300/30' },
-  yellow: { strip: 'bg-yellow-300/18 text-yellow-100', socket: 'border-yellow-400/45 text-yellow-200', selected: 'border-yellow-300 bg-yellow-300 text-zinc-950', ring: 'ring-yellow-300/30' },
-  lime: { strip: 'bg-lime-300/18 text-lime-100', socket: 'border-lime-400/45 text-lime-200', selected: 'border-lime-300 bg-lime-300 text-zinc-950', ring: 'ring-lime-300/30' },
-  green: { strip: 'bg-green-300/18 text-green-100', socket: 'border-green-400/45 text-green-200', selected: 'border-green-300 bg-green-300 text-zinc-950', ring: 'ring-green-300/30' },
-  teal: { strip: 'bg-teal-300/18 text-teal-100', socket: 'border-teal-400/45 text-teal-200', selected: 'border-teal-300 bg-teal-300 text-zinc-950', ring: 'ring-teal-300/30' },
-  cyan: { strip: 'bg-cyan-300/18 text-cyan-100', socket: 'border-cyan-400/45 text-cyan-200', selected: 'border-cyan-300 bg-cyan-300 text-zinc-950', ring: 'ring-cyan-300/30' },
-  sky: { strip: 'bg-sky-300/18 text-sky-100', socket: 'border-sky-400/45 text-sky-200', selected: 'border-sky-300 bg-sky-300 text-zinc-950', ring: 'ring-sky-300/30' },
-  blue: { strip: 'bg-blue-300/18 text-blue-100', socket: 'border-blue-400/45 text-blue-200', selected: 'border-blue-300 bg-blue-300 text-zinc-950', ring: 'ring-blue-300/30' },
-  violet: { strip: 'bg-violet-300/18 text-violet-100', socket: 'border-violet-400/45 text-violet-200', selected: 'border-violet-300 bg-violet-300 text-zinc-950', ring: 'ring-violet-300/30' },
-  purple: { strip: 'bg-purple-300/18 text-purple-100', socket: 'border-purple-400/45 text-purple-200', selected: 'border-purple-300 bg-purple-300 text-zinc-950', ring: 'ring-purple-300/30' },
-  slate: { strip: 'bg-zinc-800 text-zinc-300', socket: 'border-zinc-600 text-zinc-500', selected: 'border-zinc-400 bg-zinc-300 text-zinc-950', ring: 'ring-zinc-300/20' },
+/* Bay tone system — silkscreen accent colors on dark anodized panels.
+   strip: recessed label band color (faint tint + engraved text)
+   socket: idle jack accent (subtle ring tint on nickel)
+   selected: patched jack (bright accent glow)
+   ring: segment focus ring */
+const bayToneClasses: Record<BayTone, { strip: string; socket: string; selected: string; ring: string; accent: string }> = {
+  rose:   { strip: 'bg-rose-500/8 text-rose-200/60',   socket: 'border-rose-500/20',   selected: 'border-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.4)]',   ring: 'ring-rose-400/25',   accent: '#fb7185' },
+  red:    { strip: 'bg-red-500/8 text-red-200/60',     socket: 'border-red-500/20',    selected: 'border-red-400 shadow-[0_0_6px_rgba(239,68,68,0.4)]',    ring: 'ring-red-400/25',    accent: '#f87171' },
+  orange: { strip: 'bg-orange-500/8 text-orange-200/60', socket: 'border-orange-500/20', selected: 'border-orange-400 shadow-[0_0_6px_rgba(249,115,22,0.4)]', ring: 'ring-orange-400/25', accent: '#fb923c' },
+  amber:  { strip: 'bg-amber-500/8 text-amber-200/60',  socket: 'border-amber-500/20',  selected: 'border-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.4)]',  ring: 'ring-amber-400/25',  accent: '#fbbf24' },
+  yellow: { strip: 'bg-yellow-500/8 text-yellow-200/60', socket: 'border-yellow-500/20', selected: 'border-yellow-400 shadow-[0_0_6px_rgba(234,179,8,0.4)]',  ring: 'ring-yellow-400/25', accent: '#facc15' },
+  lime:   { strip: 'bg-lime-500/8 text-lime-200/60',   socket: 'border-lime-500/20',   selected: 'border-lime-400 shadow-[0_0_6px_rgba(132,204,22,0.4)]',   ring: 'ring-lime-400/25',   accent: '#a3e635' },
+  green:  { strip: 'bg-green-500/8 text-green-200/60',  socket: 'border-green-500/20',  selected: 'border-green-400 shadow-[0_0_6px_rgba(34,197,94,0.4)]',   ring: 'ring-green-400/25',  accent: '#4ade80' },
+  teal:   { strip: 'bg-teal-500/8 text-teal-200/60',   socket: 'border-teal-500/20',   selected: 'border-teal-400 shadow-[0_0_6px_rgba(20,184,166,0.4)]',   ring: 'ring-teal-400/25',   accent: '#2dd4bf' },
+  cyan:   { strip: 'bg-cyan-500/8 text-cyan-200/60',   socket: 'border-cyan-500/20',   selected: 'border-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.4)]',    ring: 'ring-cyan-400/25',   accent: '#22d3ee' },
+  sky:    { strip: 'bg-sky-500/8 text-sky-200/60',     socket: 'border-sky-500/20',    selected: 'border-sky-400 shadow-[0_0_6px_rgba(14,165,233,0.4)]',    ring: 'ring-sky-400/25',    accent: '#38bdf8' },
+  blue:   { strip: 'bg-blue-500/8 text-blue-200/60',   socket: 'border-blue-500/20',   selected: 'border-blue-400 shadow-[0_0_6px_rgba(59,130,246,0.4)]',   ring: 'ring-blue-400/25',   accent: '#60a5fa' },
+  violet: { strip: 'bg-violet-500/8 text-violet-200/60', socket: 'border-violet-500/20', selected: 'border-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.4)]', ring: 'ring-violet-400/25', accent: '#a78bfa' },
+  purple: { strip: 'bg-purple-500/8 text-purple-200/60', socket: 'border-purple-500/20', selected: 'border-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.4)]', ring: 'ring-purple-400/25', accent: '#c084fc' },
+  slate:  { strip: 'bg-zinc-500/8 text-zinc-300/50',   socket: 'border-zinc-600/30',   selected: 'border-zinc-400 shadow-[0_0_6px_rgba(161,161,170,0.3)]',  ring: 'ring-zinc-400/20',   accent: '#a1a1aa' },
 };
 
+/* Row shell tones — anodized aluminum panels with faint warm tint from the
+   signal category. The primary visual is brushed dark metal; the tint is
+   a barely perceptible warmth, like the difference between two anodized
+   batches under dim rack lighting. */
 const rowShellTone: Record<string, string> = {
-  'row-mic-ties': 'border-rose-900/60 bg-[linear-gradient(180deg,rgba(30,8,13,0.95),rgba(15,16,18,0.96))]',
-  'row-preamp-in': 'border-red-900/60 bg-[linear-gradient(180deg,rgba(35,12,12,0.95),rgba(15,16,18,0.96))]',
-  'row-preamp-out': 'border-orange-900/60 bg-[linear-gradient(180deg,rgba(37,20,9,0.95),rgba(15,16,18,0.96))]',
-  'row-api-line-in': 'border-lime-900/60 bg-[linear-gradient(180deg,rgba(18,29,11,0.95),rgba(15,16,18,0.96))]',
-  'row-insert-send': 'border-violet-900/60 bg-[linear-gradient(180deg,rgba(20,14,36,0.95),rgba(15,16,18,0.96))]',
-  'row-insert-return': 'border-violet-900/60 bg-[linear-gradient(180deg,rgba(29,11,36,0.95),rgba(15,16,18,0.96))]',
-  'row-dynamics': 'border-purple-900/60 bg-[linear-gradient(180deg,rgba(27,11,35,0.95),rgba(15,16,18,0.96))]',
-  'row-eq': 'border-teal-900/60 bg-[linear-gradient(180deg,rgba(11,29,28,0.95),rgba(15,16,18,0.96))]',
-  'row-spatial': 'border-cyan-900/60 bg-[linear-gradient(180deg,rgba(9,25,33,0.95),rgba(15,16,18,0.96))]',
-  'row-fx': 'border-sky-900/60 bg-[linear-gradient(180deg,rgba(8,21,35,0.95),rgba(15,16,18,0.96))]',
-  'row-api-mix': 'border-amber-900/60 bg-[linear-gradient(180deg,rgba(39,27,8,0.95),rgba(15,16,18,0.96))]',
-  'row-pueblo': 'border-yellow-900/60 bg-[linear-gradient(180deg,rgba(39,33,6,0.95),rgba(15,16,18,0.96))]',
-  'row-ad-daw': 'border-blue-900/60 bg-[linear-gradient(180deg,rgba(10,18,35,0.95),rgba(15,16,18,0.96))]',
-};
-
-const micLabelExpanded: Partial<Record<Microphone['type'], string>> = {
-  'Tube LDC': 'Tube Large C',
-  'FET LDC': 'FET Large C',
-  'FET MDC': 'FET Med C',
-  'FET SDC': 'FET Small C',
+  'row-mic-ties':         'border-[rgba(180,60,80,0.12)]',
+  'row-preamp-in':        'border-[rgba(200,80,60,0.12)]',
+  'row-preamp-out':       'border-[rgba(200,120,50,0.12)]',
+  'row-aurora-ad-in':     'border-[rgba(180,140,40,0.12)]',
+  'row-aurora-da-out':    'border-[rgba(80,160,100,0.12)]',
+  'row-tilt-in':          'border-[rgba(60,170,140,0.12)]',
+  'row-tilt-out':         'border-[rgba(60,170,140,0.12)]',
+  'row-api-line-in':      'border-[rgba(120,180,50,0.12)]',
+  'row-aurora-da-otb':    'border-[rgba(80,160,100,0.12)]',
+  'row-otb-in':           'border-[rgba(160,130,40,0.12)]',
+  'row-insert-send':      'border-[rgba(140,80,200,0.12)]',
+  'row-insert-return':    'border-[rgba(160,60,200,0.12)]',
+  'row-dynamics':         'border-[rgba(160,70,200,0.12)]',
+  'row-eq':               'border-[rgba(40,180,170,0.12)]',
+  'row-spatial':          'border-[rgba(30,160,200,0.12)]',
+  'row-fx':               'border-[rgba(30,130,210,0.12)]',
+  'row-api-mix-out':      'border-[rgba(200,150,40,0.12)]',
+  'row-summing-sources':  'border-[rgba(200,160,30,0.12)]',
+  'row-pueblo-in':        'border-[rgba(200,170,30,0.12)]',
+  'row-pueblo-out':       'border-[rgba(200,170,30,0.12)]',
+  'row-dbox-io':          'border-[rgba(40,180,160,0.12)]',
+  'row-ad-daw':           'border-[rgba(50,100,200,0.12)]',
 };
 
 const micTypeTone: Record<Microphone['type'], BayTone> = {
@@ -128,41 +140,41 @@ const micTypeTone: Record<Microphone['type'], BayTone> = {
 const perspectiveTheme: Record<Perspective, { label: string; badge: string; tray: string }> = {
   musician: {
     label: 'Musician Lens',
-    badge: 'border-emerald-600/40 bg-emerald-500/12 text-emerald-200',
-    tray: 'border-emerald-900/60 bg-emerald-950/20',
+    badge: 'border-emerald-500/50 text-emerald-300/95',
+    tray: 'border-emerald-600/35',
   },
   engineer: {
     label: 'Engineer Lens',
-    badge: 'border-red-600/40 bg-red-500/12 text-red-200',
-    tray: 'border-red-900/60 bg-red-950/20',
+    badge: 'border-red-500/50 text-red-300/95',
+    tray: 'border-red-600/35',
   },
   technical: {
     label: 'Tech Lens',
-    badge: 'border-yellow-500/40 bg-yellow-400/12 text-yellow-100',
-    tray: 'border-yellow-900/60 bg-yellow-950/20',
+    badge: 'border-yellow-400/50 text-yellow-200/95',
+    tray: 'border-yellow-600/35',
   },
 };
 
 const modeFocusedRows: Record<StudioMode, Set<string>> = {
-  tracking: new Set(['row-mic-ties', 'row-preamp-in', 'row-dynamics', 'row-eq', 'row-ad-daw']),
-  mixing: new Set(['row-preamp-out', 'row-insert-send', 'row-dynamics', 'row-eq', 'row-api-mix', 'row-pueblo', 'row-ad-daw']),
+  tracking: new Set(['row-mic-ties', 'row-preamp-in', 'row-preamp-out', 'row-aurora-ad-in', 'row-dynamics', 'row-eq']),
+  mixing: new Set(['row-aurora-da-out', 'row-tilt-in', 'row-tilt-out', 'row-api-line-in', 'row-insert-send', 'row-dynamics', 'row-eq', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw']),
 };
 
 const normalModeMeta: Record<BayNormalMode, { label: string; badge: string; bridge: string }> = {
   'full-normal': {
     label: 'Full normal',
-    badge: 'border-emerald-700/40 bg-emerald-950/40 text-emerald-200',
-    bridge: 'bg-emerald-300/80',
+    badge: 'border-emerald-800/20 text-emerald-400/60',
+    bridge: 'bg-emerald-400/50',
   },
   'half-normal': {
     label: 'Half normal',
-    badge: 'border-amber-700/40 bg-amber-950/35 text-amber-200',
-    bridge: 'border-l border-dashed border-amber-200/80',
+    badge: 'border-amber-800/20 text-amber-400/60',
+    bridge: 'border-l border-dashed border-amber-300/50',
   },
   'patch-only': {
     label: 'Patch field',
-    badge: 'border-zinc-700 bg-zinc-900/70 text-zinc-300',
-    bridge: 'bg-zinc-700/35',
+    badge: 'border-zinc-700/30 text-zinc-500',
+    bridge: 'bg-zinc-700/25',
   },
 };
 
@@ -170,12 +182,15 @@ function rowNormalMode(rowId: string): BayNormalMode {
   switch (rowId) {
     case 'row-mic-ties':
       return 'full-normal';
-    case 'row-preamp-in':
     case 'row-preamp-out':
+    case 'row-aurora-da-out':
     case 'row-insert-send':
-    case 'row-api-mix':
-    case 'row-pueblo':
       return 'half-normal';
+    case 'row-preamp-in':
+    case 'row-tilt-out':
+    case 'row-aurora-da-otb':
+    case 'row-api-mix-out':
+      return 'full-normal';
     default:
       return 'patch-only';
   }
@@ -202,10 +217,10 @@ function SectionMarker({ title, subtitle }: { title: string; subtitle: string })
   return (
     <div className="mb-2 px-0.5">
       <div className="flex items-center gap-3">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-400">{title}</div>
-        <div className="h-px flex-1 bg-zinc-800" />
+        <div className="text-silkscreen text-[8px]">{title}</div>
+        <div className="h-px flex-1" style={{ background: `linear-gradient(to right, var(--sa-lens-border), transparent)` }} />
       </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{subtitle}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-zinc-600">{subtitle}</p>
     </div>
   );
 }
@@ -223,18 +238,23 @@ function FocusCard({
   tone: 'amber' | 'blue' | 'teal' | 'violet';
   onClick: () => void;
 }) {
-  const tones = {
-    amber: 'border-amber-800/40 bg-amber-950/18 text-amber-100',
-    blue: 'border-blue-800/40 bg-blue-950/18 text-blue-100',
-    teal: 'border-teal-800/40 bg-teal-950/18 text-teal-100',
-    violet: 'border-violet-800/40 bg-violet-950/18 text-violet-100',
+  const toneAccent = {
+    amber: 'hover:border-amber-600/40',
+    blue: 'hover:border-blue-600/40',
+    teal: 'hover:border-teal-600/40',
+    violet: 'hover:border-violet-600/40',
   } as const;
 
   return (
-    <button type="button" onClick={onClick} className={`rounded-[0.9rem] border px-3 py-3 text-left transition hover:border-zinc-600 hover:bg-zinc-950/70 ${tones[tone]}`}>
-      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{title}</div>
-      <div className="mt-1 text-sm font-medium">{value}</div>
-      <div className="mt-1 text-[11px] leading-relaxed text-zinc-400">{detail}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[2px] border px-2 py-1.5 text-left transition-all duration-300 ${toneAccent[tone]}`}
+      style={{ borderColor: 'var(--sa-lens-border)', backgroundColor: 'var(--sa-lens-wash)' }}
+    >
+      <div className="text-[7px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--sa-lens-text)' }}>{title}</div>
+      <div className="mt-0.5 text-[12px] font-medium leading-snug" style={{ color: 'var(--sa-cream)' }}>{value}</div>
+      <div className="text-[9px] leading-snug" style={{ color: 'var(--sa-cream-dim)' }}>{detail}</div>
     </button>
   );
 }
@@ -314,14 +334,14 @@ function nextStep(mode: StudioMode, selectedMic: Microphone | null, selectedPrea
 
     if (parallelChain.length > 0) {
       return {
-        rowId: 'row-pueblo',
+        rowId: 'row-pueblo-in',
         heading: 'Parallel color is in play',
         body: 'The return path is now part of the console story. Follow how the tributary rejoins the mix and confirm that the extra width or space earns its place.',
       };
     }
 
     return {
-      rowId: 'row-api-mix',
+      rowId: 'row-api-mix-out',
       heading: 'Bus path is active',
       body: 'You are no longer hearing only the default mix path. The bus field below now determines how the analog sum behaves before print.',
     };
@@ -359,7 +379,7 @@ function nextStep(mode: StudioMode, selectedMic: Microphone | null, selectedPrea
 }
 
 function rowActive(rowId: string, mode: StudioMode, selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): boolean {
-  if (mode === 'mixing' && ['row-preamp-out', 'row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw'].includes(rowId)) {
+  if (mode === 'mixing' && ['row-aurora-da-out', 'row-tilt-in', 'row-tilt-out', 'row-api-line-in', 'row-insert-send', 'row-api-mix-out', 'row-pueblo-in', 'row-pueblo-out', 'row-dbox-io', 'row-ad-daw'].includes(rowId)) {
     return true;
   }
 
@@ -372,8 +392,10 @@ function rowActive(rowId: string, mode: StudioMode, selectedMic: Microphone | nu
     case 'row-api-line-in':
     case 'row-insert-send':
     case 'row-insert-return':
-    case 'row-api-mix':
-    case 'row-pueblo':
+    case 'row-api-mix-out':
+    case 'row-pueblo-in':
+    case 'row-pueblo-out':
+    case 'row-dbox-io':
     case 'row-ad-daw':
       return selectedPreamp != null || mode === 'mixing';
     case 'row-dynamics':
@@ -390,29 +412,46 @@ function rowActive(rowId: string, mode: StudioMode, selectedMic: Microphone | nu
 }
 
 function RowShell({ rowId, order, label, active, isNext, mode, children }: { rowId: string; order: number | string; label: string; active: boolean; isNext: boolean; mode: StudioMode; children: ReactNode }) {
-  const focusClass = modeFocusedRows[mode].has(rowId)
-    ? 'ring-1 ring-inset ring-zinc-100/14 shadow-[0_18px_50px_rgba(0,0,0,0.28)]'
-    : 'opacity-90';
+  const isFocused = modeFocusedRows[mode].has(rowId);
   const normalMode = rowNormalMode(rowId);
+  const ledClass = isNext ? 'led led-amber' : active ? 'led led-green' : 'led led-off';
 
   return (
-    <section data-row-id={rowId} className={`relative overflow-hidden rounded-[1rem] border px-3 py-3 md:px-4 md:py-4 ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']} ${focusClass} ${isNext ? 'ring-1 ring-inset ring-amber-200/28' : ''}`}>
+    <section
+      data-row-id={rowId}
+      className={`
+        mat-brushed-dark mat-rack-panel relative overflow-hidden rounded-[3px] border px-3 py-2 md:px-4 md:py-3
+        transition-opacity duration-500
+        ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']}
+        ${isFocused ? 'opacity-100' : 'opacity-[0.88]'}
+        ${isNext ? 'ring-1 ring-inset ring-amber-400/20' : ''}
+        ${active ? 'signal-live' : ''}
+      `.trim()}
+      style={{
+        borderTopColor: isFocused ? 'var(--sa-lens-border)' : undefined,
+        backgroundImage: isFocused ? 'linear-gradient(180deg, var(--sa-lens-wash) 0%, transparent 40%)' : undefined,
+      }}
+    >
+      {/* Corner screwheads */}
       <div className="pointer-events-none absolute inset-0">
-        <span className="absolute left-2 top-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
-        <span className="absolute right-2 top-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
-        <span className="absolute bottom-2 left-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
-        <span className="absolute bottom-2 right-2 h-2 w-2 rounded-full border border-zinc-700 bg-zinc-950/90" />
+        <span className="screwhead absolute left-2 top-2" />
+        <span className="screwhead absolute right-2 top-2" />
+        <span className="screwhead absolute bottom-2 left-2" />
+        <span className="screwhead absolute bottom-2 right-2" />
       </div>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+
+      {/* Panel header — engraved silkscreen label strip */}
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/90 px-1 text-zinc-300">{order}</span>
-            <span className="text-zinc-200">{label}</span>
+          <div className="flex items-center gap-2.5">
+            <span className={ledClass} />
+            <span className="text-silkscreen text-[9px]">{order}</span>
+            <span className="text-silkscreen text-[9px]">{label}</span>
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className={`rounded-md border px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] ${normalModeMeta[normalMode].badge}`}>{normalModeMeta[normalMode].label}</span>
-            {active && <span className="rounded-md border border-zinc-700 bg-zinc-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-zinc-200">Signal live</span>}
-            {modeFocusedRows[mode].has(rowId) && <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-zinc-400">{mode === 'tracking' ? 'Capture focus' : 'Mix focus'}</span>}
+          <div className="mt-1 flex flex-wrap gap-1">
+            <span className={`mat-recess rounded-[2px] px-2 py-0.5 text-[8px] text-silkscreen-faint ${normalModeMeta[normalMode].badge}`}>{normalModeMeta[normalMode].label}</span>
+            {active && <span className="mat-recess rounded-[2px] px-2 py-0.5 text-[8px] text-silkscreen-faint">Signal live</span>}
+            {isFocused && <span className="mat-recess rounded-[2px] px-2 py-0.5 text-[8px] text-engraved">{mode === 'tracking' ? 'Capture focus' : 'Mix focus'}</span>}
           </div>
         </div>
       </div>
@@ -421,12 +460,19 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
   );
 }
 
-function DetailTray({ title, caption, children, toneClass }: { title: string; caption: string; children: ReactNode; toneClass: string }) {
+function DetailTray({ title, caption, children, toneClass, position = 'below', onClose }: { title: string; caption: string; children: ReactNode; toneClass: string; position?: 'above' | 'below'; onClose?: () => void }) {
   return (
-    <div className={`mt-2 rounded-[0.9rem] border p-2.5 md:p-3 ${toneClass}`}>
+    <div className={`${position === 'above' ? 'mb-2' : 'mt-2'} mat-recess rounded-[3px] p-2.5 md:p-3 ${toneClass}`}>
       <div className="mb-2">
-        <div className="hidden text-[10px] uppercase tracking-[0.22em] text-zinc-500 sm:block">Focused view</div>
-        <div className="mt-1 text-sm font-medium text-zinc-100">{title}</div>
+        <div className="flex items-center justify-between">
+          <div className="hidden text-silkscreen-faint text-[8px] sm:block">Focused view</div>
+          {onClose && (
+            <button type="button" onClick={onClose} className="flex h-5 w-5 items-center justify-center rounded-sm text-zinc-500 transition-colors hover:bg-zinc-700/40 hover:text-zinc-300" aria-label="Close">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
+            </button>
+          )}
+        </div>
+        <div className="mt-1 text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{title}</div>
         <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{caption}</p>
       </div>
       {children}
@@ -467,6 +513,8 @@ function StackedBayFace({
   onTopSegmentClick,
   openBottomSegmentId,
   onBottomSegmentClick,
+  onTopJackClick,
+  onBottomJackClick,
   segmentButtonProps,
   normalMode = 'patch-only',
 }: {
@@ -479,6 +527,8 @@ function StackedBayFace({
   onTopSegmentClick?: (segmentId: string) => void;
   openBottomSegmentId?: string | null;
   onBottomSegmentClick?: (segmentId: string) => void;
+  onTopJackClick?: (segmentId: string) => void;
+  onBottomJackClick?: (segmentId: string) => void;
   segmentButtonProps?: SegmentButtonProps;
   normalMode?: BayNormalMode;
 }) {
@@ -502,12 +552,12 @@ function StackedBayFace({
       <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
         {segments.map((segment) => {
           const content = segment.subLabels ? (
-            <div className={`rounded-md px-0.5 py-0.5 text-center ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
-              <div className="text-[7px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+            <div className={`rounded-md px-0.5 py-1 text-center ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
+              <div className="text-[8px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
               <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
             </div>
           ) : (
-            <span className={`block truncate rounded-md px-0.5 py-0.5 text-center text-[7px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
+            <span className={`block truncate rounded-[2px] px-0.5 py-1.5 text-center text-[8px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
               {segment.label}
             </span>
           );
@@ -523,7 +573,7 @@ function StackedBayFace({
           );
         })}
         {usedColumns < totalColumns && (
-          <div className="rounded-md border border-zinc-800 bg-zinc-900/85 px-2 py-1 text-center text-[9px] uppercase tracking-[0.18em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - usedColumns} / span ${totalColumns - usedColumns}` }}>
+          <div className="mat-recess rounded-[2px] border border-zinc-800/20 px-2 py-1 text-center text-silkscreen-faint text-[8px]" style={{ gridColumn: `span ${totalColumns - usedColumns} / span ${totalColumns - usedColumns}` }}>
             open
           </div>
         )}
@@ -531,16 +581,22 @@ function StackedBayFace({
     );
   };
 
-  const renderSocketRow = (entries: ExpandedBayPoint[], selectedSet: Set<number>, position: 'top' | 'bottom') => (
+  const renderSocketRow = (entries: ExpandedBayPoint[], selectedSet: Set<number>, position: 'top' | 'bottom') => {
+    const rowHue = normalMode === 'patch-only' ? 'tt-jack-unnormalled' : position === 'top' ? 'tt-jack-top' : 'tt-jack-bottom';
+    const jackClick = position === 'top' ? (onTopJackClick ?? onTopSegmentClick) : (onBottomJackClick ?? onBottomSegmentClick);
+    return (
     <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
       {Array.from({ length: totalColumns }, (_, index) => {
         const entry = entries[index] ?? null;
         const selected = entry?.number != null && selectedSet.has(entry.number);
+        const clickable = jackClick && entry;
 
         return (
           <div key={`${entry?.segmentId ?? 'open'}-${index}`} className="flex justify-center">
             <span
-              className={`flex h-6 w-6 items-center justify-center rounded-full border text-[9px] font-medium sm:h-7 sm:w-7 ${entry ? (selected ? bayToneClasses[entry.tone].selected : `bg-zinc-950/95 ${bayToneClasses[entry.tone].socket}`) : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}
+              className={`tt-jack flex items-center justify-center sm:h-[24px] sm:w-[24px] ${selected ? 'tt-jack-selected' : entry ? rowHue : 'opacity-40'} ${clickable ? 'cursor-pointer' : ''}`}
+              style={selected && entry ? { color: bayToneClasses[entry.tone].accent } : undefined}
+              onClick={clickable ? () => jackClick(entry.segmentId) : undefined}
               {...(selected && entry?.number != null ? { 'data-selected-point': `${rowId}-${position}-${entry.number}` } : {})}
             >
               {entry?.number ?? ''}
@@ -549,7 +605,8 @@ function StackedBayFace({
         );
       })}
     </div>
-  );
+    );
+  };
 
   const renderBridgeRow = () => (
     <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
@@ -565,20 +622,18 @@ function StackedBayFace({
   );
 
   return (
-    <div className="rounded-[1rem] border border-zinc-700 bg-[linear-gradient(180deg,rgba(18,20,24,0.98),rgba(9,11,13,0.98))] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <div className="mb-2 flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2.5 py-2">
+      <div className="mb-1.5 flex items-center justify-between text-silkscreen-faint text-[8px]">
         <span>Top row</span>
         <span>{normalModeMeta[normalMode].label}</span>
         <span>Bottom row</span>
       </div>
-      <div className="overflow-x-auto pb-1">
-        <div className="min-w-max space-y-1.5">
-          {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
-          {renderSocketRow(topEntries, selectedTop, 'top')}
-          {renderBridgeRow()}
-          {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
-          {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
-        </div>
+      <div className="space-y-1.5">
+        {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
+        {renderSocketRow(topEntries, selectedTop, 'top')}
+        {renderBridgeRow()}
+        {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+        {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
       </div>
     </div>
   );
@@ -607,25 +662,24 @@ function PhysicalPairedBay({
   const bottomEntries = expandBaySegments(bottomSegments);
 
   return (
-    <div className="rounded-[1rem] border border-zinc-700 bg-[linear-gradient(180deg,rgba(18,20,24,0.98),rgba(9,11,13,0.98))] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <div className="mb-2 flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2.5 py-2">
+      <div className="mb-1.5 flex items-center justify-between text-silkscreen-faint text-[8px]">
         <span>Top row</span>
         <span>{normalModeMeta[normalMode].label}</span>
         <span>Bottom row</span>
       </div>
-      <div className="overflow-x-auto pb-1">
-        <div className="min-w-max space-y-1.5">
-          <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
-            {topSegments.map((segment) => {
-              const isOpen = openSegmentId === segment.id;
+      <div className="space-y-1.5">
+        <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
+          {topSegments.map((segment) => {
+            const isOpen = openSegmentId === segment.id;
               const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
               const content = segment.subLabels ? (
-                <div className={`rounded-lg px-0.5 py-0.5 text-center ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
-                  <div className="text-[7px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+                <div className={`rounded-[2px] px-0.5 py-1 text-center ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
+                  <div className="text-[8px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
                   <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
                 </div>
               ) : (
-                <span className={`block truncate rounded-full px-0.5 py-1 text-center text-[7px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
+                <span className={`block truncate rounded-[2px] px-0.5 py-1.5 text-center text-[8px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
                   {segment.label}
                 </span>
               );
@@ -641,7 +695,7 @@ function PhysicalPairedBay({
               );
             })}
             {topEntries.length < totalColumns && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/85 px-1 py-1 text-center text-[8px] uppercase tracking-[0.12em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - topEntries.length} / span ${totalColumns - topEntries.length}` }}>
+              <div className="mat-recess rounded-[2px] border border-zinc-800/20 px-1 py-1 text-center text-silkscreen-faint text-[8px]" style={{ gridColumn: `span ${totalColumns - topEntries.length} / span ${totalColumns - topEntries.length}` }}>
                 open
               </div>
             )}
@@ -654,11 +708,17 @@ function PhysicalPairedBay({
 
               return (
                 <div key={index} className="flex flex-col items-center gap-1">
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${top ? `bg-zinc-950/95 ${bayToneClasses[top.tone].socket}` : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}>
+                  <span
+                    className={`tt-jack flex items-center justify-center tt-jack-top ${top ? '' : 'opacity-40'} ${onSegmentClick && top ? 'cursor-pointer' : ''}`}
+                    onClick={onSegmentClick && top ? () => onSegmentClick(top.segmentId) : undefined}
+                  >
                     {top?.number ?? ''}
                   </span>
-                  <span className={`h-3 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/80' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/80' : 'bg-zinc-700/35') : 'bg-zinc-800'}`} />
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[9px] font-medium md:h-6 md:w-6 ${bottom ? `bg-zinc-950/95 ${bayToneClasses[bottom.tone].socket}` : 'border-zinc-800 bg-zinc-900/70 text-zinc-700'}`}>
+                  <span className={`h-3 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/60' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/50' : 'bg-zinc-700/25') : 'bg-zinc-800/30'}`} />
+                  <span
+                    className={`tt-jack flex items-center justify-center tt-jack-bottom ${bottom ? '' : 'opacity-40'} ${onSegmentClick && bottom ? 'cursor-pointer' : ''}`}
+                    onClick={onSegmentClick && bottom ? () => onSegmentClick(bottom.segmentId) : undefined}
+                  >
                     {bottom?.number ?? ''}
                   </span>
                 </div>
@@ -671,12 +731,12 @@ function PhysicalPairedBay({
               const isOpen = openSegmentId === segment.id;
               const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
               const content = segment.subLabels ? (
-                <div className={`rounded-lg px-0.5 py-0.5 text-center ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
-                  <div className="text-[7px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+                <div className={`rounded-[2px] px-0.5 py-1 text-center ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
+                  <div className="text-[8px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
                   <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
                 </div>
               ) : (
-                <span className={`block truncate rounded-full px-0.5 py-1 text-center text-[7px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
+                <span className={`block truncate rounded-[2px] px-0.5 py-1.5 text-center text-[8px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
                   {segment.label}
                 </span>
               );
@@ -692,29 +752,49 @@ function PhysicalPairedBay({
               );
             })}
             {bottomEntries.length < totalColumns && (
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/85 px-1 py-1 text-center text-[8px] uppercase tracking-[0.12em] text-zinc-500" style={{ gridColumn: `span ${totalColumns - bottomEntries.length} / span ${totalColumns - bottomEntries.length}` }}>
+              <div className="mat-recess rounded-[2px] border border-zinc-800/20 px-1 py-1 text-center text-silkscreen-faint text-[8px]" style={{ gridColumn: `span ${totalColumns - bottomEntries.length} / span ${totalColumns - bottomEntries.length}` }}>
                 open
               </div>
             )}
           </div>
         </div>
-      </div>
     </div>
   );
 }
 
-function ActionButton({ children, active = false, tone = 'zinc', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean; tone?: 'amber' | 'blue' | 'teal' | 'cyan' | 'violet' | 'zinc' }) {
+function ActionButton({ children, active = false, tone = 'zinc', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean; tone?: 'amber' | 'blue' | 'teal' | 'cyan' | 'violet' | 'zinc' | 'lens' }) {
   const tones = {
-    amber: active ? 'border-amber-300 bg-amber-300 text-zinc-950' : 'border-amber-700/40 bg-amber-950/30 text-amber-200 hover:bg-amber-950/50',
-    blue: active ? 'border-blue-300 bg-blue-300 text-zinc-950' : 'border-blue-700/40 bg-blue-950/30 text-blue-200 hover:bg-blue-950/50',
-    teal: active ? 'border-teal-300 bg-teal-300 text-zinc-950' : 'border-teal-700/40 bg-teal-950/30 text-teal-200 hover:bg-teal-950/50',
-    cyan: active ? 'border-cyan-300 bg-cyan-300 text-zinc-950' : 'border-cyan-700/40 bg-cyan-950/30 text-cyan-200 hover:bg-cyan-950/50',
-    violet: active ? 'border-violet-300 bg-violet-300 text-zinc-950' : 'border-violet-700/40 bg-violet-950/30 text-violet-200 hover:bg-violet-950/50',
-    zinc: active ? 'border-zinc-300 bg-zinc-300 text-zinc-950' : 'border-zinc-700 bg-zinc-900/70 text-zinc-300 hover:bg-zinc-900',
+    amber: active
+      ? 'border-amber-500/50 bg-amber-500/15 text-amber-200 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+      : 'border-amber-800/25 bg-[#141210] text-amber-300/70 hover:bg-amber-950/30 hover:text-amber-200',
+    blue: active
+      ? 'border-blue-500/50 bg-blue-500/15 text-blue-200 shadow-[0_0_8px_rgba(59,130,246,0.15)]'
+      : 'border-blue-800/25 bg-[#101214] text-blue-300/70 hover:bg-blue-950/30 hover:text-blue-200',
+    teal: active
+      ? 'border-teal-500/50 bg-teal-500/15 text-teal-200 shadow-[0_0_8px_rgba(20,184,166,0.15)]'
+      : 'border-teal-800/25 bg-[#0f1312] text-teal-300/70 hover:bg-teal-950/30 hover:text-teal-200',
+    cyan: active
+      ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-200 shadow-[0_0_8px_rgba(6,182,212,0.15)]'
+      : 'border-cyan-800/25 bg-[#0f1314] text-cyan-300/70 hover:bg-cyan-950/30 hover:text-cyan-200',
+    violet: active
+      ? 'border-violet-500/50 bg-violet-500/15 text-violet-200 shadow-[0_0_8px_rgba(139,92,246,0.15)]'
+      : 'border-violet-800/25 bg-[#121014] text-violet-300/70 hover:bg-violet-950/30 hover:text-violet-200',
+    zinc: active
+      ? 'border-zinc-400/40 bg-zinc-400/10 text-zinc-200'
+      : 'border-zinc-700/40 bg-[#111110] text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-300',
+    lens: active
+      ? 'text-zinc-100'
+      : 'text-zinc-300 hover:text-zinc-100',
   };
 
+  const isLens = tone === 'lens';
+
   return (
-    <button {...props} className={`rounded-md border px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] transition ${tones[tone]} ${className}`.trim()}>
+    <button
+      {...props}
+      className={`rounded-[2px] border px-3 py-1.5 text-silkscreen text-[9px] transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:-translate-y-[0.5px] ${tones[tone]} ${className}`.trim()}
+      style={isLens ? { borderColor: 'var(--sa-lens-border)', backgroundColor: 'var(--sa-lens-wash)', color: 'var(--sa-lens-text)' } : undefined}
+    >
       {children}
     </button>
   );
@@ -722,21 +802,21 @@ function ActionButton({ children, active = false, tone = 'zinc', className = '',
 
 function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Unit details', selected, primaryLabel, primaryActive = selected, onPrimary, onInspect, extraAction }: { pointNumber: number; tone: BayTone; title: string; meta: string; body?: string; detailLabel?: string; selected: boolean; primaryLabel: string; primaryActive?: boolean; onPrimary: () => void; onInspect: () => void; extraAction?: ReactNode }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 ${selected ? 'border-zinc-500 bg-zinc-950/85' : 'border-zinc-800 bg-zinc-950/55'}`}>
+    <div className={`mat-brushed-dark rounded-[3px] border px-3 py-2 transition-all duration-300 ${selected ? 'border-zinc-600/40 mat-raised' : 'border-zinc-800/30'}`}>
       <div className="flex items-start gap-3">
-        <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium ${selected ? bayToneClasses[tone].selected : `bg-zinc-950/95 ${bayToneClasses[tone].socket}`}`}>
+        <span className={`mt-0.5 tt-jack flex items-center justify-center ${selected ? 'tt-jack-selected' : ''}`} style={selected ? { color: bayToneClasses[tone].accent } : undefined}>
           {pointNumber}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-zinc-100">{title}</span>
-            {selected && <span className="rounded-full border border-zinc-700 bg-zinc-900/70 px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] text-zinc-300">active</span>}
+            <span className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{title}</span>
+            {selected && <span className="led led-green" />}
           </div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500">{meta}</div>
-          {body && <p className="mt-1 text-xs leading-relaxed text-zinc-400">{body}</p>}
+          <div className="mt-0.5 text-silkscreen-faint text-[8px]">{meta}</div>
+          {body && <p className="mt-1 text-xs leading-relaxed text-zinc-500">{body}</p>}
           <div className="mt-1.5 flex flex-wrap gap-2">
-            <ActionButton type="button" onClick={onPrimary} tone="amber" active={primaryActive}>{primaryLabel}</ActionButton>
             <ActionButton type="button" onClick={onInspect}>{detailLabel}</ActionButton>
+            <ActionButton type="button" onClick={onPrimary} tone="amber" active={primaryActive}>{primaryLabel}</ActionButton>
             {extraAction}
           </div>
         </div>
@@ -755,16 +835,47 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
       return () => window.cancelAnimationFrame(frame);
     }, []);
 
-  const utilityMicTypes: Set<Microphone['type']> = new Set(['Measurement', 'Subkick', 'Field Recorder']);
-  const orderedMicTypes: Microphone['type'][] = ['Tube LDC', 'FET LDC', 'FET MDC', 'FET SDC', 'Ribbon', 'Dynamic', 'Boundary'];
-  const micGroupsRaw: Array<{ label: string; mics: Microphone[]; tone: BayTone }> = orderedMicTypes
-    .map((type) => ({ label: micLabelExpanded[type] ?? type, mics: microphones.filter((mic) => mic.type === type), tone: micTypeTone[type] }))
-    .filter((entry) => entry.mics.length > 0);
-  const utilityMics = microphones.filter((mic) => utilityMicTypes.has(mic.type));
-  if (utilityMics.length > 0) {
-    micGroupsRaw.push({ label: 'Utility', mics: utilityMics, tone: 'cyan' });
+  // ── Hybrid mic grouping: vendor pools + topology clusters ──
+  const _broadcastIds = new Set(['mic-sm7b', 'mic-ev-re20', 'mic-beyer-x99', 'mic-earthworks-ethos']);
+  const _miscDynIds = new Set(['mic-heil-pr40', 'mic-se-v7', 'mic-lewitt-mtp550']);
+  const _ribbonIds = new Set(['mic-coles-4038', 'mic-cascade-fathead']);
+  const _utilityIds = new Set(['mic-crown-glm200', 'mic-shure-sm91', 'mic-beyer-tgd71', 'mic-zoom-h4npro', 'mic-umik1', 'mic-kraken-subkick']);
+  const _specialIds = new Set([..._broadcastIds, ..._miscDynIds, ..._ribbonIds, ..._utilityIds]);
+
+  const _neumannCloneIds = new Set(['mic-stam-sa87-red', 'mic-stam-sa87-black', 'mic-ut-fet47']);
+
+  const _vendorDefs: Array<{ vendor: string; label: string; tone: BayTone }> = [
+    { vendor: 'Audix', label: 'Audix', tone: 'purple' },
+    { vendor: 'Electro-Voice', label: 'Electro-Voice', tone: 'blue' },
+    { vendor: 'Shure', label: 'Shure', tone: 'orange' },
+    { vendor: 'Telefunken Elektroakustik', label: 'Telefunken', tone: 'rose' },
+    { vendor: 'Sennheiser', label: 'Sennheiser', tone: 'sky' },
+    { vendor: 'Beyerdynamic', label: 'Beyerdynamic', tone: 'teal' },
+    { vendor: 'AKG', label: 'AKG', tone: 'green' },
+    { vendor: 'Audio-Technica', label: 'Audio-Technica', tone: 'lime' },
+    { vendor: 'Peavey', label: 'Peavey', tone: 'slate' },
+    { vendor: 'Yamaha', label: 'Yamaha', tone: 'cyan' },
+    { vendor: 'Wunder Audio', label: 'Wunder', tone: 'amber' },
+    { vendor: 'Sony', label: 'Sony', tone: 'sky' },
+  ];
+
+  const micGroups: Array<{ label: string; mics: Microphone[]; tone: BayTone }> = [];
+  // Neumann Clones drawer (Stams + UT FET47)
+  const _neumannCloneMics = microphones.filter((m) => _neumannCloneIds.has(m.id));
+  if (_neumannCloneMics.length > 0) micGroups.push({ label: 'Neumann Clones', mics: _neumannCloneMics, tone: 'violet' });
+
+  for (const def of _vendorDefs) {
+    const mics = microphones.filter((m) => m.vendor === def.vendor && !_specialIds.has(m.id) && !_neumannCloneIds.has(m.id));
+    if (mics.length > 0) micGroups.push({ label: def.label, mics, tone: def.tone });
   }
-  const micGroups = micGroupsRaw.sort((a, b) => a.mics.length - b.mics.length);
+  const _ribbonMics = microphones.filter((m) => _ribbonIds.has(m.id));
+  if (_ribbonMics.length > 0) micGroups.push({ label: 'Ribbons', mics: _ribbonMics, tone: 'red' });
+  const _broadcastMics = microphones.filter((m) => _broadcastIds.has(m.id));
+  if (_broadcastMics.length > 0) micGroups.push({ label: 'Broadcast', mics: _broadcastMics, tone: 'yellow' });
+  const _miscDynMics = microphones.filter((m) => _miscDynIds.has(m.id));
+  if (_miscDynMics.length > 0) micGroups.push({ label: 'Misc Dynamics', mics: _miscDynMics, tone: 'orange' });
+  const _utilityMics = microphones.filter((m) => _utilityIds.has(m.id));
+  if (_utilityMics.length > 0) micGroups.push({ label: 'Utility', mics: _utilityMics, tone: 'slate' });
   const standardPreamps = preamps.filter((preamp) => !hasStandaloneEqSection(preamp));
   const preampEqUnits = preamps.filter(hasStandaloneEqSection);
   const orderedPreamps = [...standardPreamps, ...preampEqUnits];
@@ -783,7 +894,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     return 1;
   };
   const selectedPreampPoints = selectedPreamp
-    ? Array.from({ length: selectedPreamp.channels }, (_, i) => preampPointNumber(selectedPreamp.id) + i)
+    ? [preampPointNumber(selectedPreamp.id)]
     : [];
   const insertIds = new Set(insertChain.map((processor) => processor.item.id));
   const parallelIds = new Set(parallelChain.map((processor) => processor.item.id));
@@ -813,9 +924,9 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     return 1;
   };
 
-  const selectedPointsForItem = <T extends { id: string; channels: number }>(groups: Array<{ items: T[] }>, itemId: string, channels: number): number[] => {
+  const selectedPointsForItem = <T extends { id: string; channels: number }>(groups: Array<{ items: T[] }>, itemId: string, _channels: number): number[] => {
     const start = pointNumberForGroupedItem(groups, itemId);
-    return Array.from({ length: channels }, (_, i) => start + i);
+    return [start];
   };
 
   const setOpenSection = (rowId: string, sectionId: string) => {
@@ -823,6 +934,10 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
       ...current,
       [rowId]: current[rowId] === sectionId ? null : sectionId,
     }));
+  };
+
+  const clearOpenSection = (rowId: string) => {
+    setOpenSectionByRow((current) => ({ ...current, [rowId]: null }));
   };
 
   const findInsertIndex = (type: InsertProcessor['type'], itemId: string) => insertChain.findIndex((processor) => processor.type === type && processor.item.id === itemId);
@@ -862,8 +977,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     ? [
         { label: 'Playback', rowId: 'row-preamp-out' },
         { label: 'Insert path', rowId: 'row-insert-send' },
-        { label: 'Summing', rowId: 'row-api-mix' },
-        { label: 'Cascade', rowId: 'row-pueblo' },
+        { label: 'Summing', rowId: 'row-api-mix-out' },
+        { label: 'Cascade', rowId: 'row-pueblo-in' },
         { label: 'Print', rowId: 'row-ad-daw' },
       ]
     : [
@@ -884,16 +999,10 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         ...outboardProcessors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: item.routing_mode === 'parallel-send-return' ? 'sky' as BayTone : 'cyan' as BayTone, onUse: () => item.routing_mode === 'parallel-send-return' ? toggleParallel({ type: 'outboard', item }) : toggleInsert({ type: 'outboard', item }), onInspect: () => onInspect(item.id), actionLabel: item.routing_mode === 'parallel-send-return' ? 'Blend return' : 'Insert' })),
       ].filter((entry) => `${entry.title} ${entry.subtitle}`.toLowerCase().includes(normalizedQuery)).slice(0, 8)
     : [];
-  const micSegments: BaySegment[] = (() => {
-    const nonDynamic = micGroups.filter((g) => g.label !== 'Dynamic');
-    const dynamicGroup = micGroups.find((g) => g.label === 'Dynamic');
-    const nonDynamicTotal = nonDynamic.reduce((s, g) => s + g.mics.length, 0);
-    const segments: BaySegment[] = nonDynamic.map((entry) => ({ id: entry.label.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label: entry.label, count: entry.mics.length, tone: entry.tone }));
-    if (dynamicGroup) {
-      segments.push({ id: 'dynamic', label: 'Dynamic', count: BAY_ROW_LENGTH - nonDynamicTotal, tone: dynamicGroup.tone });
-    }
-    return segments;
-  })();
+  // Tie line segments — simple 1–48 numbered tie lines for Bay 0
+  const tieLineSegments: PairedBaySegment[] = [
+    { id: 'tie-lines', label: 'XLR Tie Lines 1–48', count: BAY_ROW_LENGTH, tone: 'slate', startNumber: 1 },
+  ];
   const standardPreampChannels = standardPreamps.reduce((s, p) => s + p.channels, 0);
   const preampEqChannels = preampEqUnits.reduce((s, p) => s + p.channels, 0);
   const preampSegments: BaySegment[] = [];
@@ -929,9 +1038,9 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     return 1;
   };
 
-  const selectedPointsForCombinedItem = (itemId: string, channels: number): number[] => {
+  const selectedPointsForCombinedItem = (itemId: string, _channels: number): number[] => {
     const start = pointNumberForCombinedItem(itemId);
-    return Array.from({ length: channels }, (_, i) => start + i);
+    return [start];
   };
   const dawOutputTopSegments: PairedBaySegment[] = [
     { id: 'lynx-line-outputs', label: 'Lynx Line Outputs', count: 24, tone: 'blue', startNumber: 1 },
@@ -994,8 +1103,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     { id: 'api-mix-a-out', label: 'Mix A Out', count: 2, tone: 'amber', startNumber: 1 },
     { id: 'api-mix-b-out', label: 'Mix B Out', count: 2, tone: 'amber', startNumber: 3 },
     { id: 'api-master-out', label: 'Master Out', count: 2, tone: 'amber', startNumber: 5 },
-    { id: 'api-direct-outs', label: 'Direct Outs 1–16', count: 16, tone: 'orange', startNumber: 7 },
-    { id: 'api-cue-out', label: 'Cue Out', count: 2, tone: 'yellow', startNumber: 23 },
+    { id: 'api-cue-out', label: 'Cue Out', count: 2, tone: 'yellow', startNumber: 7 },
   ];
   const apiMixBottomSegments: PairedBaySegment[] = [
     { id: 'api-ext-in', label: 'Ext Input (OTB)', count: 2, tone: 'amber', startNumber: 1 },
@@ -1043,9 +1151,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   const selectedMicPoint = selectedMic ? (() => {
     const group = micGroups.find((g) => g.mics.some((m) => m.id === selectedMic.id));
     if (!group) return 0;
-    const start = micStartPoint(group.label);
-    const idx = group.mics.findIndex((m) => m.id === selectedMic.id);
-    return start + idx;
+    return micStartPoint(group.label);
   })() : 0;
 
   const segmentInfo: Record<string, { title: string; description: string }> = {
@@ -1145,10 +1251,6 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     'api-master-out': {
       title: 'API ASM164 Master Output',
       description: 'Combined Mix A + Mix B stereo output after the master summing stage. This is the final analog output of the API — the sum of both program buses through the master 2520 output op-amp and iron transformer. Used when both buses need to converge to a single stereo destination.',
-    },
-    'api-direct-outs': {
-      title: 'API ASM164 Direct Outputs (Ch 1–16)',
-      description: 'Per-channel direct outputs tapped post-fader, post-pan but pre-bus assignment. These are always active — even when the channel is assigned to Mix A or B, the direct output carries the processed signal. Useful for multitrack printing through the API preamp/summing topology while simultaneously feeding the stereo bus.',
     },
     'api-cue-out': {
       title: 'API ASM164 Cue Output',
@@ -1273,7 +1375,94 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   };
 
   return (
-    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-4 py-4">
+    <>
+      {/* ── Control dock — locked below header, does not scroll ── */}
+      <div className="shrink-0 border-b px-4 py-1.5 transition-colors duration-500" style={{ borderColor: 'var(--sa-lens-border)', background: `linear-gradient(180deg, var(--sa-lens-tint) 0%, var(--sa-lens-wash) 60%, var(--sa-mode-tint, transparent) 100%)` }}>
+        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-4">
+        <FocusCard
+          title="Source"
+          value={selectedMic?.name ?? (mode === 'mixing' ? 'DAW → Aurora DA' : 'Awaiting source')}
+          detail={mode === 'mixing' ? 'Playback exits via Aurora(n) line outputs into the summing field.' : 'Choose the voice entering the room.'}
+          tone="amber"
+          onClick={() => scrollToRow(mode === 'mixing' ? 'row-preamp-out' : 'row-mic-ties')}
+        />
+        <FocusCard
+          title="Gain"
+          value={selectedPreamp?.name ?? (mode === 'mixing' ? 'API 1–16 · OTB 17–24' : 'Awaiting preamp')}
+          detail={mode === 'mixing' ? 'Aurora outputs are normalled: 1–16 via Tilt EQs to API, 17–24 to OTB.' : 'This stage determines how the source arrives.'}
+          tone="blue"
+          onClick={() => scrollToRow(mode === 'mixing' ? 'row-insert-send' : 'row-preamp-in')}
+        />
+        <FocusCard
+          title="Process"
+          value={insertChain.length + parallelChain.length > 0 ? [...insertChain.map(p => p.item.name), ...parallelChain.map(p => `${p.item.name} ∥`)].join(' → ') : 'Clean path standing by'}
+          detail={insertChain.length + parallelChain.length > 0 ? `${insertChain.length} insert${insertChain.length !== 1 ? 's' : ''}, ${parallelChain.length} parallel return${parallelChain.length !== 1 ? 's' : ''}` : 'Dynamics, EQ, and outboard are available in the field below.'}
+          tone="violet"
+          onClick={() => scrollToRow('row-dynamics')}
+        />
+        <FocusCard
+          title="Destination"
+          value={mode === 'mixing' ? 'Pueblo → AD+ → DAW' : 'Aurora AD → DAW'}
+          detail={mode === 'mixing' ? 'OTB feeds API ext input; API Mix A feeds AD+ Input A. Pueblo Bank D hardwired to AD+ Input B.' : 'The normalled path reaches Aurora(n) for conversion without extra patching.'}
+          tone="teal"
+          onClick={() => scrollToRow('row-ad-daw')}
+        />
+        </div>
+
+        <div className="mt-1 flex flex-wrap gap-1.5">
+        {stageTargets.map((target) => (
+          <ActionButton key={target.rowId} type="button" tone="lens" onClick={() => scrollToRow(target.rowId)}>
+            {target.label}
+          </ActionButton>
+        ))}
+        </div>
+
+        {/* ── Chain strip: removable chips for every patched item ── */}
+        {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <span className="text-[8px] font-semibold uppercase tracking-[0.12em] mr-1" style={{ color: 'var(--sa-lens-text)' }}>Route</span>
+
+            {selectedMic && (
+              <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-amber-700/25 bg-amber-950/15 px-1.5 py-0.5 text-[10px] text-amber-200/80">
+                {selectedMic.name}
+                <button type="button" onClick={() => onSelectMic(null)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove mic">✕</button>
+              </span>
+            )}
+
+            {selectedMic && selectedPreamp && <span className="text-[10px] text-stone-600">→</span>}
+
+            {selectedPreamp && (
+              <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-blue-700/25 bg-blue-950/15 px-1.5 py-0.5 text-[10px] text-blue-200/80">
+                {selectedPreamp.name}
+                <button type="button" onClick={() => onSelectPreamp(null)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove preamp">✕</button>
+              </span>
+            )}
+
+            {insertChain.map((proc, i) => (
+              <span key={`ins-${proc.item.id}`} className="inline-flex items-center gap-1">
+                <span className="text-[10px] text-stone-600">→</span>
+                <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-violet-700/25 bg-violet-950/15 px-1.5 py-0.5 text-[10px] text-violet-200/80">
+                  {proc.item.name}
+                  <button type="button" onClick={() => onRemoveInsert(i)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove from chain">✕</button>
+                </span>
+              </span>
+            ))}
+
+            {parallelChain.map((proc, i) => (
+              <span key={`par-${proc.item.id}`} className="inline-flex items-center gap-1">
+                <span className="text-[10px] text-stone-600">∥</span>
+                <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-sky-700/25 bg-sky-950/15 px-1.5 py-0.5 text-[10px] text-sky-200/80">
+                  {proc.item.name}
+                  <button type="button" onClick={() => onRemoveParallel(i)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove parallel return">✕</button>
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Scrollable bay rows ── */}
+      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-4 py-4">
       <SignalFlowOverlay
         containerRef={scrollContainerRef}
         perspective={perspective}
@@ -1283,67 +1472,29 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         insertChain={insertChain}
         parallelChain={parallelChain}
       />
-      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <FocusCard
-          title="Source"
-          value={selectedMic?.name ?? (mode === 'mixing' ? 'DAW playback' : 'Awaiting source')}
-          detail={mode === 'mixing' ? 'Playback stems are already feeding the console path.' : 'Choose the voice entering the room.'}
-          tone="amber"
-          onClick={() => scrollToRow(mode === 'mixing' ? 'row-preamp-out' : 'row-mic-ties')}
-        />
-        <FocusCard
-          title="Gain"
-          value={selectedPreamp?.name ?? (mode === 'mixing' ? 'Console input path' : 'Awaiting preamp')}
-          detail={mode === 'mixing' ? 'Line outputs are normalled into the summing field.' : 'This stage determines how the source arrives.'}
-          tone="blue"
-          onClick={() => scrollToRow(mode === 'mixing' ? 'row-insert-send' : 'row-preamp-in')}
-        />
-        <FocusCard
-          title="Process"
-          value={insertChain.length + parallelChain.length > 0 ? `${insertChain.length} insert · ${parallelChain.length} parallel` : 'Default path only'}
-          detail="Open the outboard field only when the sound earns the commitment."
-          tone="violet"
-          onClick={() => scrollToRow('row-dynamics')}
-        />
-        <FocusCard
-          title="Destination"
-          value={mode === 'mixing' ? 'Summing → print' : 'Capture → recorder'}
-          detail={mode === 'mixing' ? 'API, Pueblo, and AD+ define the final handoff.' : 'The default route reaches the converter without extra work.'}
-          tone="teal"
-          onClick={() => scrollToRow('row-ad-daw')}
-        />
-      </div>
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        {stageTargets.map((target) => (
-          <ActionButton key={target.rowId} type="button" tone="zinc" onClick={() => scrollToRow(target.rowId)}>
-            {target.label}
-          </ActionButton>
-        ))}
-      </div>
-
-      <div className={`mb-4 rounded-[1rem] border p-4 shadow-[0_16px_45px_rgba(0,0,0,0.22)] ${guideTheme.tray}`}>
+      <div className={`mb-4 mat-brushed-dark mat-rack-panel rounded-[3px] border p-4 transition-colors duration-500 ${guideTheme.tray}`} style={{ backgroundImage: 'linear-gradient(180deg, var(--sa-lens-wash) 0%, transparent 50%)' }}>
         <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-md border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${guideTheme.badge}`}>{guideTheme.label}</span>
-              <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-zinc-300">{guide.heading}</span>
-              <span className="rounded-md border border-zinc-700 bg-zinc-950/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-zinc-400">{routeStateLabel(mode, insertChain, parallelChain)}</span>
+              <span className={`mat-recess rounded-[2px] border px-2.5 py-1 text-silkscreen text-[8px] ${guideTheme.badge}`}>{guideTheme.label}</span>
+              <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2.5 py-1 text-silkscreen text-[8px]">{guide.heading}</span>
+              <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2.5 py-1 text-engraved text-[8px] uppercase tracking-[0.12em]">{routeStateLabel(mode, insertChain, parallelChain)}</span>
             </div>
-            <p className="max-w-4xl text-sm leading-relaxed text-zinc-200">{guide.body}</p>
+            <p className="max-w-4xl text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>{guide.body}</p>
             <div className="flex flex-wrap gap-1.5">
               {routeChips.length > 0 ? routeChips.map((label) => (
-                <span key={label} className="rounded-md border border-zinc-700 bg-zinc-950/65 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-300">{label}</span>
+                <span key={label} className="mat-recess rounded-[2px] border border-zinc-700/20 px-2 py-1 text-silkscreen-faint text-[8px]">{label}</span>
               )) : (
-                <span className="rounded-md border border-zinc-800 bg-zinc-950/55 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Default route standing by</span>
+                <span className="mat-recess rounded-[2px] border border-zinc-800/20 px-2 py-1 text-engraved text-[8px] uppercase tracking-[0.12em]">Default route standing by</span>
               )}
             </div>
           </div>
 
-          <div className="space-y-2 rounded-[0.9rem] border border-zinc-800 bg-zinc-950/60 px-3 py-3">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Stage</div>
-            <div className="text-sm text-zinc-100">{mode === 'mixing' ? 'Summing and print path' : 'Source to capture path'}</div>
-            <div className="text-[11px] leading-relaxed text-zinc-500">Solid straps mean direct normals. Dashed breaks indicate a half-normal field that can be tapped or redirected.</div>
+          <div className="mat-recess space-y-2 rounded-[3px] px-3 py-3">
+            <div className="text-silkscreen-faint text-[8px]">Stage</div>
+            <div className="text-sm" style={{ color: 'var(--sa-cream-dim)' }}>{mode === 'mixing' ? 'Summing and print path' : 'Source to capture path'}</div>
+            <div className="text-[11px] leading-relaxed text-zinc-600">Solid straps mean direct normals. Dashed breaks indicate a half-normal field that can be tapped or redirected.</div>
             {analysis && (
               <div className="pt-1">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Live read</div>
@@ -1356,17 +1507,17 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
       </div>
 
       {normalizedQuery && (
-        <div className="relative z-[1] mb-4 rounded-[0.9rem] border border-zinc-800 bg-zinc-950/70 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.22)]">
-          <div className="mb-2 text-[10px] uppercase tracking-[0.22em] text-zinc-500">Quick gear access</div>
+        <div className="relative z-[1] mb-4 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
+          <div className="mb-2 text-silkscreen-faint text-[8px]">Quick gear access</div>
           {quickResults.length > 0 ? (
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
               {quickResults.map((result) => (
-                <div key={result.id} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+                <div key={result.id} className="mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-2">
                   <div className="flex items-start gap-3">
-                    <span className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full border ${bayToneClasses[result.tone].socket}`}>•</span>
+                    <span className="tt-jack mt-0.5 flex h-7 w-7 items-center justify-center">•</span>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-zinc-100">{result.title}</div>
-                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500">{result.subtitle}</div>
+                      <div className="truncate text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{result.title}</div>
+                      <div className="mt-0.5 text-silkscreen-faint text-[8px]">{result.subtitle}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <ActionButton type="button" tone="amber" onClick={result.onUse}>{result.actionLabel}</ActionButton>
                         <ActionButton type="button" onClick={result.onInspect}>Inspect</ActionButton>
@@ -1383,6 +1534,19 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
       )}
 
       <div className="relative z-[1] space-y-4">
+      {/* ── Mic Locker — standalone source selection above the patchbay ── */}
+      {mode === 'tracking' && (
+        <div className="space-y-2">
+          <SectionMarker title="Mic Locker" subtitle="Choose a source. The tie line bay below carries the selection to the preamps." />
+          <MicLocker
+            groups={micGroups}
+            selectedMic={selectedMic}
+            onSelectMic={onSelectMic}
+            onInspect={onInspect}
+            isNext={guide.rowId === 'row-mic-ties' && !selectedMic}
+          />
+        </div>
+      )}
         {patchRows.map((row) => {
           const active = rowActive(row.id, mode, selectedMic, selectedPreamp, insertChain, parallelChain);
           const isNext = guide.rowId === row.id;
@@ -1393,29 +1557,47 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
 
           if (row.id === 'row-mic-ties') {
             const openSection = openSectionByRow[row.id] ?? null;
-            const activeGroup = openSection ? (micGroups.find((entry) => entry.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') === openSection) ?? null) : null;
+            const preampInputSectionPreamps = openSection === 'direct-preamp-inputs' ? standardPreamps
+              : openSection === 'preamp-eq-inputs' ? preampEqUnits
+              : null;
 
             return (
               <div key={row.id} className="space-y-2">
-                <SectionMarker title="Source and capture" subtitle="The studio is already normalled to record. Start here, then decide whether the route stays clean or becomes a deliberate chain." />
+                <SectionMarker title="Source and capture" subtitle="Tie lines carry the mic selection to a preamp input. Choose the front-end that shapes the source." />
                 <RowShell rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext} mode={mode}>
-                  <StackedBayFace rowId="row-mic-ties" topSegments={toPairedSegments(micSegments)} bottomSegments={preampInputSegments} selectedTopPoints={selectedMicPoint > 0 ? [selectedMicPoint] : []} selectedBottomPoints={selectedPreampPoints} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="full-normal" />
+                  <StackedBayFace
+                    rowId="row-mic-ties"
+                    topSegments={tieLineSegments}
+                    bottomSegments={preampInputSegments}
+                    selectedTopPoints={selectedMicPoint > 0 && selectedMicPoint <= BAY_ROW_LENGTH ? [selectedMicPoint] : []}
+                    selectedBottomPoints={selectedPreampPoints}
+                    openBottomSegmentId={openSection}
+                    onBottomSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
+                    onBottomJackClick={(segmentId) => setOpenSection(row.id, segmentId)}
+                    segmentButtonProps={{ 'data-row-section': row.id }}
+                    normalMode="patch-only"
+                  />
 
-                  {activeGroup && (
-                    <DetailTray title={`${activeGroup.label} tie lines`} caption="These sources are live at the bay. Choose one for the route or open it for a deeper sonic read." toneClass="border-rose-900/60 bg-rose-950/18">
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                        {activeGroup.mics.map((mic, index) => (
+                  {preampInputSectionPreamps && preampInputSectionPreamps.length > 0 && (
+                    <DetailTray title={openSection === 'preamp-eq-inputs' ? 'Preamp / EQ inputs' : 'Preamp inputs'} caption={openSection === 'preamp-eq-inputs' ? 'These channels anchor the first gain stage and later contribute another shaped analog pass.' : 'The first gain stage shapes how the source arrives at the recorder.'} toneClass="border-blue-900/20 bg-blue-950/8" onClose={() => clearOpenSection(row.id)}>
+                      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                        {preampInputSectionPreamps.map((preamp) => (
                           <CompactChoice
-                            key={mic.id}
-                            pointNumber={micStartPoint(activeGroup.label) + index}
-                            tone={activeGroup.tone}
-                            title={mic.name}
-                            meta={compactMeta([mic.type, `${mic.qty}x`, mic.patterns.join('/')])}
-                            selected={selectedMic?.id === mic.id}
-                            primaryLabel="Add to chain"
-                            onPrimary={() => onSelectMic(mic)}
-                            detailLabel="Mic details"
-                            onInspect={() => onInspect(mic.id)}
+                            key={preamp.id}
+                            pointNumber={preampPointNumber(preamp.id)}
+                            tone={openSection === 'preamp-eq-inputs' ? 'cyan' : 'blue'}
+                            title={preamp.name}
+                            meta={compactMeta([preamp.topology, `${preamp.channels}ch`, preamp.eq_features ?? null, preamp.input_z_hi ? 'Hi-Z' : null])}
+                            selected={selectedPreamp?.id === preamp.id}
+                            primaryLabel="Patch into chain"
+                            onPrimary={() => { onSelectPreamp(preamp); clearOpenSection(row.id); }}
+                            detailLabel="Preamp details"
+                            onInspect={() => onInspect(preamp.id)}
+                            extraAction={hasStandaloneEqSection(preamp) ? (
+                              <ActionButton type="button" tone="cyan" active={insertPreampEqIds.has(preamp.id)} onClick={() => toggleInsert({ type: 'preamp-eq', item: preamp })}>
+                                {insertPreampEqIds.has(preamp.id) ? 'Remove EQ stage' : 'Add EQ stage'}
+                              </ActionButton>
+                            ) : undefined}
                           />
                         ))}
                       </div>
@@ -1433,21 +1615,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
 
             return (
               <RowShell key={row.id} rowId={row.id} order="1" label="PREAMP OUTPUTS / DAW INPUTS" active={active} isNext={isNext} mode={mode}>
-                <StackedBayFace
-                  rowId="row-preamp-in"
-                  topSegments={preampOutputSegments}
-                  bottomSegments={dawInputSegments}
-                  selectedTopPoints={selectedPreampPoints}
-                  selectedBottomPoints={[]}
-                  openTopSegmentId={openSection}
-                  onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
-                  onBottomSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
-                  segmentButtonProps={{ 'data-row-section': row.id }}
-                  normalMode="half-normal"
-                />
-
                 {openSection && preampsInSection.length > 0 && (
-                  <DetailTray title={normalizedSection === 'preamp-eq' ? 'Preamp / EQ units' : 'Standalone preamps'} caption={normalizedSection === 'preamp-eq' ? 'These channels can anchor the first gain stage and later contribute another shaped analog pass.' : 'These are the core front-end choices that define how the source arrives at the recorder.'} toneClass="border-blue-900/60 bg-blue-950/18">
+                  <DetailTray title={normalizedSection === 'preamp-eq' ? 'Preamp / EQ units' : 'Standalone preamps'} caption={normalizedSection === 'preamp-eq' ? 'These channels can anchor the first gain stage and later contribute another shaped analog pass.' : 'These are the core front-end choices that define how the source arrives at the recorder.'} toneClass="border-blue-900/20 bg-blue-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                       {preampsInSection.map((preamp) => (
                         <CompactChoice
@@ -1455,10 +1624,10 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                           pointNumber={preampPointNumber(preamp.id)}
                           tone={openSection === 'preamp-eq' ? 'cyan' : 'blue'}
                           title={preamp.name}
-                          meta={compactMeta([preamp.topology, `${preamp.channels}ch`, preamp.eq_features ?? null])}
+                          meta={compactMeta([preamp.topology, `${preamp.channels}ch`, preamp.eq_features ?? null, preamp.input_z_hi ? 'Hi-Z' : null])}
                           selected={selectedPreamp?.id === preamp.id}
                           primaryLabel="Patch into chain"
-                          onPrimary={() => onSelectPreamp(preamp)}
+                          onPrimary={() => { onSelectPreamp(preamp); clearOpenSection(row.id); }}
                           detailLabel="Preamp details"
                           onInspect={() => onInspect(preamp.id)}
                           extraAction={hasStandaloneEqSection(preamp) ? (
@@ -1472,8 +1641,21 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                   </DetailTray>
                 )}
 
+                <StackedBayFace
+                  rowId="row-preamp-in"
+                  topSegments={preampOutputSegments}
+                  bottomSegments={dawInputSegments}
+                  selectedTopPoints={selectedPreampPoints}
+                  selectedBottomPoints={[]}
+                  openTopSegmentId={openSection}
+                  onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
+                  onBottomSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
+                  segmentButtonProps={{ 'data-row-section': row.id }}
+                  normalMode="half-normal"
+                />
+
                 {openSection && openSection === 'lynx-line-inputs' && (
-                  <DetailTray title={segmentInfo['lynx-line-inputs'].title} caption={segmentInfo['lynx-line-inputs'].description} toneClass="border-green-900/60 bg-green-950/18">
+                  <DetailTray title={segmentInfo['lynx-line-inputs'].title} caption={segmentInfo['lynx-line-inputs'].description} toneClass="border-green-900/20 bg-green-950/8" onClose={() => clearOpenSection(row.id)}>
                     <div />
                   </DetailTray>
                 )}
@@ -1490,7 +1672,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                 <PhysicalPairedBay topSegments={dawOutputTopSegments} bottomSegments={dawOutputBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
-                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/60 bg-blue-950/18">
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/20 bg-blue-950/8" onClose={() => clearOpenSection(row.id)}>
                     <div />
                   </DetailTray>
                 )}
@@ -1507,7 +1689,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                 <PhysicalPairedBay topSegments={insertSendSegments} bottomSegments={insertReturnSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
-                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-violet-900/60 bg-violet-950/18">
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-violet-900/20 bg-violet-950/8" onClose={() => clearOpenSection(row.id)}>
                     <div />
                   </DetailTray>
                 )}
@@ -1523,20 +1705,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
               <div key={row.id} className="space-y-2">
                 <SectionMarker title="Outboard field" subtitle="Dynamics, equalizers, and returns live here. Nothing needs to be patched unless the sound genuinely benefits from it." />
                 <RowShell rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
-                  <StackedBayFace
-                    rowId="row-dynamics"
-                    topSegments={toPairedSegments(compressorSegments)}
-                    bottomSegments={toPairedSegments(compressorSegments)}
-                    selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))}
-                    selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))}
-                    openTopSegmentId={openSection}
-                    onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
-                    segmentButtonProps={{ 'data-row-section': row.id }}
-                    normalMode="patch-only"
-                  />
-
                   {activeGroup && (
-                    <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/60 bg-purple-950/18">
+                    <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/20 bg-purple-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
                       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                         {activeGroup.items.map((compressor) => {
                           const insertSelected = insertChain.some((processor) => processor.type === 'compressor' && processor.item.id === compressor.id);
@@ -1552,16 +1722,28 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                               selected={insertSelected || parallelSelected}
                               primaryLabel={insertSelected ? 'Remove from chain' : 'Patch into chain'}
                               primaryActive={insertSelected}
-                              onPrimary={() => toggleInsert({ type: 'compressor', item: compressor })}
+                              onPrimary={() => { toggleInsert({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}
                               detailLabel="Compressor details"
                               onInspect={() => onInspect(compressor.id)}
-                              extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => toggleParallel({ type: 'compressor', item: compressor })}>{parallelSelected ? 'Remove branch' : 'Blend return'}</ActionButton>}
+                              extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => { toggleParallel({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}>{parallelSelected ? 'Remove branch' : 'Blend return'}</ActionButton>}
                             />
                           );
                         })}
                       </div>
                     </DetailTray>
                   )}
+
+                  <StackedBayFace
+                    rowId="row-dynamics"
+                    topSegments={toPairedSegments(compressorSegments)}
+                    bottomSegments={toPairedSegments(compressorSegments)}
+                    selectedTopPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))}
+                    selectedBottomPoints={compressors.flatMap((c) => (insertIds.has(c.id) || parallelIds.has(c.id) ? selectedPointsForItem(compressorGroups, c.id, c.channels) : []))}
+                    openTopSegmentId={openSection}
+                    onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
+                    segmentButtonProps={{ 'data-row-section': row.id }}
+                    normalMode="patch-only"
+                  />
                 </RowShell>
               </div>
             );
@@ -1587,10 +1769,8 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
 
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
-                <StackedBayFace rowId="row-eq" topSegments={toPairedSegments(combinedOutboardSegments)} bottomSegments={toPairedSegments(combinedOutboardSegments)} selectedTopPoints={combinedSelectedTop} selectedBottomPoints={combinedSelectedTop} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="patch-only" />
-
                 {activeEntry && trayConfig && (
-                  <DetailTray title={trayConfig.title} caption={trayConfig.caption} toneClass={trayConfig.toneClass}>
+                  <DetailTray title={trayConfig.title} caption={trayConfig.caption} toneClass={trayConfig.toneClass} position="above" onClose={() => clearOpenSection(row.id)}>
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                       {activeEntry.category === 'eq' && activeEntry.items.map((equalizer) => (
                         <CompactChoice
@@ -1601,7 +1781,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                           meta={compactMeta([(equalizer as any).topology, `${equalizer.channels}ch`, (equalizer as any).bands])}
                           selected={insertIds.has(equalizer.id)}
                           primaryLabel={insertIds.has(equalizer.id) ? 'Remove from chain' : 'Patch into chain'}
-                          onPrimary={() => toggleInsert({ type: 'equalizer', item: equalizer as any })}
+                          onPrimary={() => { toggleInsert({ type: 'equalizer', item: equalizer as any }); clearOpenSection(row.id); }}
                           detailLabel="EQ details"
                           onInspect={() => onInspect(equalizer.id)}
                         />
@@ -1615,7 +1795,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                           meta={compactMeta([(processor as any).type, (processor as any).format, `${processor.channels}ch`])}
                           selected={insertIds.has(processor.id)}
                           primaryLabel={insertIds.has(processor.id) ? 'Remove from chain' : 'Patch into chain'}
-                          onPrimary={() => toggleInsert({ type: 'outboard', item: processor as any })}
+                          onPrimary={() => { toggleInsert({ type: 'outboard', item: processor as any }); clearOpenSection(row.id); }}
                           detailLabel="Processor details"
                           onInspect={() => onInspect(processor.id)}
                         />
@@ -1629,7 +1809,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                           meta={compactMeta([(processor as any).type, (processor as any).format, `${processor.channels}ch`])}
                           selected={parallelIds.has(processor.id)}
                           primaryLabel={parallelIds.has(processor.id) ? 'Remove branch' : 'Blend return'}
-                          onPrimary={() => toggleParallel({ type: 'outboard', item: processor as any })}
+                          onPrimary={() => { toggleParallel({ type: 'outboard', item: processor as any }); clearOpenSection(row.id); }}
                           detailLabel="Processor details"
                           onInspect={() => onInspect(processor.id)}
                         />
@@ -1637,11 +1817,13 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                     </div>
                   </DetailTray>
                 )}
+
+                <StackedBayFace rowId="row-eq" topSegments={toPairedSegments(combinedOutboardSegments)} bottomSegments={toPairedSegments(combinedOutboardSegments)} selectedTopPoints={combinedSelectedTop} selectedBottomPoints={combinedSelectedTop} openTopSegmentId={openSection} onTopSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} segmentButtonProps={{ 'data-row-section': row.id }} normalMode="patch-only" />
               </RowShell>
             );
           }
 
-          if (row.id === 'row-api-mix') {
+          if (row.id === 'row-api-mix-out') {
             const openSection = openSectionByRow[row.id] ?? null;
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
@@ -1652,7 +1834,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                   <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                   {activeInfo && (
-                    <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/60 bg-amber-950/18">
+                    <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/20 bg-amber-950/8" onClose={() => clearOpenSection(row.id)}>
                       <div />
                     </DetailTray>
                   )}
@@ -1661,7 +1843,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
             );
           }
 
-          if (row.id === 'row-pueblo') {
+          if (row.id === 'row-pueblo-in') {
             const openSection = openSectionByRow[row.id] ?? null;
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
 
@@ -1670,7 +1852,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                 <PhysicalPairedBay topSegments={puebloTopSegments} bottomSegments={puebloBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
                 {activeInfo && (
-                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-yellow-900/60 bg-yellow-950/18">
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-yellow-900/20 bg-yellow-950/8" onClose={() => clearOpenSection(row.id)}>
                     <div />
                   </DetailTray>
                 )}
@@ -1687,7 +1869,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
                 <PhysicalPairedBay topSegments={adDawTopSegments} bottomSegments={adDawBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="patch-only" />
 
                 {activeInfo && (
-                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/60 bg-blue-950/18">
+                  <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/20 bg-blue-950/8" onClose={() => clearOpenSection(row.id)}>
                     <div />
                   </DetailTray>
                 )}
@@ -1700,12 +1882,13 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
       </div>
 
       {showCascadeView ? (
-        <Suspense fallback={<div className="mt-4 rounded-[1.7rem] border border-zinc-800 bg-zinc-950/40 px-4 py-6 text-sm text-zinc-500">Loading console and monitor path…</div>}>
-          <CascadeView mode={mode} perspective={perspective} />
+        <Suspense fallback={<div className="mt-4 mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-6 text-sm text-silkscreen-faint">Loading console and monitor path…</div>}>
+          <CascadeView mode={mode} perspective={perspective} onInspect={onInspect} />
         </Suspense>
       ) : (
-        <div className="mt-4 rounded-[1.7rem] border border-zinc-800 bg-zinc-950/40 px-4 py-6 text-sm text-zinc-500">Loading console and monitor path…</div>
+        <div className="mt-4 mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-6 text-sm text-silkscreen-faint">Loading console and monitor path…</div>
       )}
     </div>
+    </>
   );
 }

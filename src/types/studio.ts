@@ -18,8 +18,9 @@ export type EMZone = 'A' | 'B' | 'C';
 export type SignalDomain = 'mic' | 'line' | 'instrument' | 'speaker' | 'digital-audio' | 'digital-clock' | 'control';
 export type RouteStatus = 'incomplete' | 'default' | 'custom' | 'experimental' | 'warning';
 export type StudioMode = 'tracking' | 'mixing';
+export type BayTone = 'rose' | 'red' | 'orange' | 'amber' | 'yellow' | 'lime' | 'green' | 'teal' | 'cyan' | 'sky' | 'blue' | 'violet' | 'purple' | 'slate';
 export type NormalType = 'full-normal' | 'half-normal' | 'hardwired';
-export type CascadeRole = 'converter-source' | 'tributary-sum' | 'tributary-merge' | 'console' | 'parallel-sum' | 'master-converter' | 'monitor-controller';
+export type CascadeRole = 'converter-source' | 'tributary-sum' | 'cascade-destination' | 'console' | 'master-converter';
 
 export interface FreqPoint { hz: number; mag_db: number; phase_deg?: number; }
 
@@ -83,6 +84,59 @@ export interface MonitorSpeaker {
   character: string;
   engineering: string;
   use_case: string;
+}
+
+export interface NodeZone {
+  id: string;
+  node_id: string;
+  label: string;
+  accent: string;
+  musician: string;
+  engineer: string;
+  technical: string;
+  specs: { label: string; value: string }[];
+}
+
+/* ── Topology behavior — consequence-chain knowledge ──
+ *
+ * Each topology family (FET, variable-mu, optical, etc.) has inherent
+ * circuit characteristics that produce behavioral tendencies. These
+ * tendencies have sonic consequences, and those consequences are
+ * valued in certain musical contexts.
+ *
+ * This is NOT prescriptive ("use FET on drums"). It's a causal chain:
+ *   mechanism → tendency → sonic result → where that result is valued
+ *
+ * Individual units modify or extend their topology's baseline.
+ */
+
+export type TopologyFamily = 'compressor' | 'preamp' | 'equalizer' | 'microphone';
+
+export interface TopologyBehavior {
+  id: string;
+  family: TopologyFamily;
+  topology: CompressorTopology | PreampTopology | EQTopology | MicType;
+  label: string;
+  /** One-line essence — what makes this topology distinct */
+  essence: string;
+  /** The circuit mechanism: what physically happens in this topology */
+  mechanism: {
+    musician: string;
+    engineer: string;
+    technical: string;
+  };
+  /** What those mechanisms produce sonically — what you hear and feel */
+  sonic_character: {
+    musician: string;
+    engineer: string;
+    technical: string;
+  };
+  /** Musical contexts where the sonic character is valued */
+  valued_in: string[];
+  /** Musical contexts where the sonic character may not serve */
+  less_suited_to: string[];
+  /** How individual implementations typically vary within this family */
+  unit_variance: string;
 }
 
 export interface DescriptiveMetadata {
@@ -239,7 +293,7 @@ export type InsertProcessor =
   | { type: 'outboard'; item: OutboardProcessor };
 
 export type ParallelSendSourceId = 'api-insert-send-1' | 'api-mix-a-insert-send' | 'api-mix-b-insert-send';
-export type ParallelReturnDestinationId = 'tonelux-otb-input' | 'api-mix-b-return' | 'api-insert-return-1';
+export type ParallelReturnDestinationId = 'pueblo-bank-a-input' | 'pueblo-bank-b-input' | 'api-insert-return-1';
 
 export interface ParallelSendSourceOption {
   id: ParallelSendSourceId;
@@ -251,7 +305,7 @@ export interface ParallelReturnDestinationOption {
   id: ParallelReturnDestinationId;
   label: string;
   description: string;
-  blend_stage: 'tonelux-otb' | 'direct-return';
+  blend_stage: 'pueblo-bank-a' | 'pueblo-bank-b' | 'direct-return';
   exclusive: boolean;
 }
 
@@ -260,7 +314,7 @@ export interface ParallelRouting {
   send_source_label: string;
   return_destination_id: ParallelReturnDestinationId;
   return_destination_label: string;
-  blend_stage: 'tonelux-otb' | 'direct-return';
+  blend_stage: 'pueblo-bank-a' | 'pueblo-bank-b' | 'direct-return';
 }
 
 export type ParallelProcessorDraft =

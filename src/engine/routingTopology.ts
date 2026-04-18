@@ -28,18 +28,18 @@ export const parallelSendSourceOptions: ParallelSendSourceOption[] = [
 
 export const parallelReturnDestinationOptions: ParallelReturnDestinationOption[] = [
   {
-    id: 'tonelux-otb-input',
-    label: 'Tonelux shared wet return',
-    description: 'Feeds the Tonelux summing return so multiple wet branches can be combined before they re-enter Mix B.',
-    blend_stage: 'tonelux-otb',
+    id: 'pueblo-bank-a-input',
+    label: 'Pueblo Bank A (open summing)',
+    description: 'Returns to Pueblo Bank A — an independent open summing bank. Multiple parallel returns can share this bus.',
+    blend_stage: 'pueblo-bank-a',
     exclusive: false,
   },
   {
-    id: 'api-mix-b-return',
-    label: 'Direct Mix B return',
-    description: 'Returns straight to Mix B without Tonelux summing. Only one processor can occupy this return point at a time.',
-    blend_stage: 'direct-return',
-    exclusive: true,
+    id: 'pueblo-bank-b-input',
+    label: 'Pueblo Bank B (open summing)',
+    description: 'Returns to Pueblo Bank B — an independent open summing bank. Multiple parallel returns can share this bus.',
+    blend_stage: 'pueblo-bank-b',
+    exclusive: false,
   },
   {
     id: 'api-insert-return-1',
@@ -76,7 +76,7 @@ export function getAvailableParallelReturnDestinations(proc: ParallelProcessorDr
 
 export function buildDefaultParallelRouting(proc: ParallelProcessorDraft): ParallelRouting {
   const sendSourceId: ParallelSendSourceId = proc.type === 'compressor' ? 'api-insert-send-1' : 'api-mix-a-insert-send';
-  const returnDestinationId: ParallelReturnDestinationId = 'tonelux-otb-input';
+  const returnDestinationId: ParallelReturnDestinationId = 'pueblo-bank-a-input';
   const sendSource = lookupSendSource(sendSourceId);
   const returnDestination = lookupReturnDestination(returnDestinationId);
 

@@ -175,9 +175,7 @@ export function validatePatchGraph(
       });
     }
 
-    const expectedTarget = processor.routing.blend_stage === 'tonelux-otb'
-      ? 'parallel-blend-output'
-      : processor.routing.return_destination_id;
+    const expectedTarget = processor.routing.return_destination_id;
 
     if (endpointIds.has(processor.routing.send_source_id) && !hasPath(graph, processor.routing.send_source_id, expectedTarget)) {
       issues.push({
@@ -193,7 +191,7 @@ export function validatePatchGraph(
         code: 'parallel-return-conflict',
         severity: 'blocked',
         message: `${processor.item.name} is returning to the main insert return, which replaces the direct path instead of blending alongside it.`,
-        suggested_action: 'Return the branch through Tonelux OTB or another true blend destination.',
+        suggested_action: 'Return the branch through Pueblo Bank A/B or another true blend destination.',
       });
     }
   });
