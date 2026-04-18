@@ -1,6 +1,5 @@
 import { Suspense, lazy } from 'react';
 import { useStudio } from './hooks/useStudio';
-import { useDemoWalkthrough } from './hooks/useDemoWalkthrough';
 import Header from './components/Header';
 import PatchbayView from './components/PatchbayView';
 
@@ -30,6 +29,8 @@ function App() {
     setPerspective,
     setMode,
     setSearch,
+    setMixSessionTrackCount,
+    updateMixPathDestination,
     selectMic,
     selectPreamp,
     addInsert,
@@ -41,23 +42,7 @@ function App() {
     clearChain,
     equalizers,
     outboardProcessors,
-    microphones,
-    preamps,
-    compressors,
   } = useStudio();
-
-  const demo = useDemoWalkthrough({
-    mode: state.mode,
-    microphones,
-    preamps,
-    compressors,
-    equalizers,
-    onSelectMic: selectMic,
-    onSelectPreamp: selectPreamp,
-    onAddInsert: addInsert,
-    onClearChain: clearChain,
-    onSetMode: setMode,
-  });
 
   const theme = shellTheme[state.perspective];
 
@@ -70,10 +55,6 @@ function App() {
         onSearch={setSearch}
         onPerspective={setPerspective}
         onMode={setMode}
-        demoState={demo.demoState}
-        demoNarration={demo.narration}
-        onStartDemo={demo.start}
-        onCancelDemo={demo.cancel}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -95,6 +76,10 @@ function App() {
             perspectiveInsight={state.perspectiveInsights[state.perspective]}
             sonicSignature={state.sonicSignature}
             searchQuery={state.searchQuery}
+            mixSessionTrackCount={state.mixSessionTrackCount}
+            mixPaths={state.mixPaths}
+            onSetMixSessionTrackCount={setMixSessionTrackCount}
+            onUpdateMixPathDestination={updateMixPathDestination}
             onSelectMic={selectMic}
             onSelectPreamp={selectPreamp}
             onAddInsert={addInsert}

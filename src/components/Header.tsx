@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Perspective, StudioMode } from '../types/studio';
-import type { DemoState } from '../hooks/useDemoWalkthrough';
 
 interface Props {
   perspective: Perspective;
@@ -9,10 +8,6 @@ interface Props {
   onSearch: (q: string) => void;
   onPerspective: (p: Perspective) => void;
   onMode: (m: StudioMode) => void;
-  demoState: DemoState;
-  demoNarration: string;
-  onStartDemo: () => void;
-  onCancelDemo: () => void;
 }
 
 const perspectives: { key: Perspective; label: string }[] = [
@@ -39,7 +34,7 @@ const headerTheme: Record<Perspective, { bar: string; active: string; chip: stri
   },
 };
 
-export default function Header({ perspective, mode, searchQuery, onSearch, onPerspective, onMode, demoState, demoNarration, onStartDemo, onCancelDemo }: Props) {
+export default function Header({ perspective, mode, searchQuery, onSearch, onPerspective, onMode }: Props) {
   const theme = headerTheme[perspective];
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -111,26 +106,8 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
               </button>
             ))}
           </div>
-
-          <button
-            type="button"
-            onClick={demoState === 'running' ? onCancelDemo : onStartDemo}
-            className={`ml-auto mat-recess rounded-[3px] border px-2 py-0.5 text-[9px] font-medium transition sm:ml-0 ${
-              demoState === 'running'
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-200 animate-pulse'
-                : 'border-zinc-600/20 text-zinc-400 hover:border-zinc-500/30 hover:text-zinc-200'
-            }`}
-          >
-            {demoState === 'running' ? 'Stop' : 'Demo'}
-          </button>
         </div>
       </div>
-
-      {demoState === 'running' && demoNarration && (
-        <div className="mt-3 mat-recess rounded-[3px] border border-amber-800/20 px-3 py-2">
-          <p className="text-xs leading-relaxed text-amber-200/90 animate-fade-in">{demoNarration}</p>
-        </div>
-      )}
     </header>
   );
 }

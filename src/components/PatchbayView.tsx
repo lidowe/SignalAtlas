@@ -15,6 +15,8 @@ import type {
   RouteSummaryModel,
   SonicSignature,
   StudioMode,
+  MixPathModel,
+  MixPathDestinationId,
 } from '../types/studio';
 import { patchRows } from '../data/studio';
 import { microphones } from '../data/microphones';
@@ -39,6 +41,10 @@ interface Props {
   perspectiveInsight: PerspectiveInsightModel;
   sonicSignature: SonicSignature;
   searchQuery: string;
+  mixSessionTrackCount: number;
+  mixPaths: MixPathModel[];
+  onSetMixSessionTrackCount: (count: number) => void;
+  onUpdateMixPathDestination: (pathId: string, destination: MixPathDestinationId) => void;
   onSelectMic: (m: Microphone | null) => void;
   onSelectPreamp: (p: Preamp | null) => void;
   onAddInsert: (proc: InsertProcessor) => void;
@@ -68,12 +74,23 @@ interface PairedBaySegment {
   tone: BayTone;
   startNumber?: number;
   subLabels?: string[];
+  spacer?: boolean;
 }
 
 interface ExpandedBayPoint {
   tone: BayTone;
   number: number | null;
   segmentId: string;
+}
+
+type OutputRouteMenu = 'root' | 'summing' | 'daw';
+
+interface OutputRouteChoice {
+  id: string;
+  label: string;
+  targetRowId: string;
+  targetSectionId?: string;
+  inspectId?: string;
 }
 
 interface SegmentButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -333,7 +350,7 @@ function rowActive(rowId: string, mode: StudioMode, selectedMic: Microphone | nu
   }
 }
 
-function RowShell({ rowId, order, label, active, isNext, mode, children }: { rowId: string; order: number | string; label: string; active: boolean; isNext: boolean; mode: StudioMode; children: ReactNode }) {
+function RowShell({ rowId, order, label: _label, active, isNext, mode, children }: { rowId: string; order: number | string; label?: string; active: boolean; isNext: boolean; mode: StudioMode; children: ReactNode }) {
   const isFocused = modeFocusedRows[mode].has(rowId);
   const ledClass = isNext ? 'led led-amber' : active ? 'led led-green' : 'led led-off';
 
@@ -341,7 +358,7 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
     <section
       data-row-id={rowId}
       className={`
-        mat-brushed-dark mat-rack-panel relative overflow-hidden rounded-[3px] border px-2 py-1.5 md:px-3 md:py-2
+        mat-brushed-dark mat-rack-panel relative overflow-hidden rounded-[3px] border pl-9 pr-2 py-1.5 md:pl-10 md:pr-3 md:py-2
         transition-opacity duration-500
         ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']}
         ${isFocused ? 'opacity-100' : 'opacity-[0.88]'}
@@ -360,10 +377,15 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
         <span className="screwhead absolute bottom-2 right-2" />
       </div>
 
+      <div className="absolute inset-y-0 left-1.5 flex w-6 flex-col items-center justify-center gap-0.5 border-r border-zinc-700/30 pr-1 text-[7px] uppercase tracking-[0.18em] text-zinc-500">
+        <span>B</span>
+        <span>A</span>
+        <span>Y</span>
+        <span className="mt-1 text-[9px] text-zinc-300">{order}</span>
+      </div>
+
       <div className="mb-1 flex items-center gap-2">
         <span className={ledClass} />
-        <span className="text-silkscreen text-[8px]">{order}</span>
-        <span className="text-silkscreen text-[8px]">{label}</span>
       </div>
       {children}
     </section>
@@ -397,7 +419,11 @@ function expandBaySegments(segments: PairedBaySegment[]): ExpandedBayPoint[] {
     const start = segment.startNumber ?? 1;
 
     for (let index = 0; index < segment.count; index += 1) {
-      expanded.push({ tone: segment.tone, number: start + index, segmentId: segment.id });
+      expanded.push({
+        tone: segment.tone,
+        number: segment.spacer ? null : start + index,
+        segmentId: segment.id,
+      });
     }
   });
 
@@ -461,16 +487,20 @@ function StackedBayFace({
     return (
       <div className="flex flex-wrap gap-1">
         {segments.map((segment) => {
+          if (segment.spacer) {
+            return <div key={segment.id} className="min-w-[4.1rem]" aria-hidden="true" />;
+          }
+
           const content = segment.subLabels ? (
-            <div className={`min-w-[5.5rem] rounded-[4px] border px-1.5 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
-              <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-              <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
-              <div className="mt-0.5 flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+            <div className={`min-w-[4.1rem] rounded-[3px] border px-1 py-[3px] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_5px_rgba(0,0,0,0.38),0_0_0_1px_rgba(0,0,0,0.24)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-400/60'} hover:-translate-y-[0.5px]`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.12)' : 'rgba(78,78,78,0.28)' }}>
+              <div className="text-[8px] font-semibold uppercase tracking-[0.06em] leading-[1.05]">{segment.label}</div>
+              <div className="mt-[1px] flex items-center justify-center gap-0.5 text-[5px] uppercase tracking-[0.1em] text-zinc-200/80"><span>press</span><span>▾</span></div>
+              <div className="mt-[1px] flex justify-around text-[6px] uppercase tracking-[0.05em] leading-tight opacity-85">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
             </div>
           ) : (
-            <span className={`block min-w-[5.5rem] rounded-[4px] border px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
-              <span className="block">{segment.label}</span>
-              <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
+            <span className={`block min-w-[4.1rem] rounded-[3px] border px-1 py-[4px] text-center text-[8px] font-semibold uppercase tracking-[0.06em] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_5px_rgba(0,0,0,0.38),0_0_0_1px_rgba(0,0,0,0.24)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-400/60'} hover:-translate-y-[0.5px]`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.12)' : 'rgba(78,78,78,0.28)' }}>
+              <span className="block leading-[1.05]">{segment.label}</span>
+              <span className="mt-[1px] block text-[5px] uppercase tracking-[0.1em] text-zinc-200/80">press ▾</span>
             </span>
           );
 
@@ -529,9 +559,9 @@ function StackedBayFace({
   );
 
   return (
-    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2 py-1.5">
+    <div className="mat-brushed-mid mat-recess rounded-[3px] px-1.5 py-1">
       {layout === 'single-bottom' ? (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
           <div className="overflow-x-auto pb-0.5">
             <div className="min-w-[42rem]">
@@ -541,7 +571,7 @@ function StackedBayFace({
           <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
           <div className="overflow-x-auto pb-0.5">
             <div className="min-w-[42rem] space-y-1">
@@ -581,22 +611,26 @@ function PhysicalPairedBay({
   const bottomEntries = expandBaySegments(bottomSegments);
 
   return (
-    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2 py-1.5">
-      <div className="space-y-1">
+    <div className="mat-brushed-mid mat-recess rounded-[3px] px-1.5 py-1">
+      <div className="space-y-0.5">
         <div className="flex flex-wrap gap-1">
           {topSegments.map((segment) => {
+            if (segment.spacer) {
+              return <div key={`top-${segment.id}`} className="min-w-[4.1rem]" aria-hidden="true" />;
+            }
+
             const isOpen = openSegmentId === segment.id;
             const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
             const content = segment.subLabels ? (
-              <div className={`min-w-[5.5rem] rounded-[4px] border px-1.5 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-                <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
-                <div className="mt-0.5 flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+              <div className={`min-w-[4.1rem] rounded-[3px] border px-1 py-[3px] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_5px_rgba(0,0,0,0.38),0_0_0_1px_rgba(0,0,0,0.24)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-400/60'} hover:-translate-y-[0.5px]`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.12)' : 'rgba(78,78,78,0.28)' }}>
+                <div className="text-[8px] font-semibold uppercase tracking-[0.06em] leading-[1.05]">{segment.label}</div>
+                <div className="mt-[1px] flex items-center justify-center gap-0.5 text-[5px] uppercase tracking-[0.1em] text-zinc-200/80"><span>press</span><span>▾</span></div>
+                <div className="mt-[1px] flex justify-around text-[6px] uppercase tracking-[0.05em] leading-tight opacity-85">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
               </div>
             ) : (
-              <span className={`block min-w-[5.5rem] rounded-[4px] border px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
-                <span className="block">{segment.label}</span>
-                <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
+              <span className={`block min-w-[4.1rem] rounded-[3px] border px-1 py-[4px] text-center text-[8px] font-semibold uppercase tracking-[0.06em] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_5px_rgba(0,0,0,0.38),0_0_0_1px_rgba(0,0,0,0.24)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-400/60'} hover:-translate-y-[0.5px]`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.12)' : 'rgba(78,78,78,0.28)' }}>
+                <span className="block leading-[1.05]">{segment.label}</span>
+                <span className="mt-[1px] block text-[5px] uppercase tracking-[0.1em] text-zinc-200/80">press ▾</span>
               </span>
             );
 
@@ -643,18 +677,22 @@ function PhysicalPairedBay({
 
         <div className="flex flex-wrap gap-1">
           {bottomSegments.map((segment) => {
+            if (segment.spacer) {
+              return <div key={`bottom-${segment.id}`} className="min-w-[4.1rem]" aria-hidden="true" />;
+            }
+
             const isOpen = openSegmentId === segment.id;
             const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
             const content = segment.subLabels ? (
-              <div className={`min-w-[5.5rem] rounded-[4px] border px-1.5 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-                <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
-                <div className="mt-0.5 flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+              <div className={`min-w-[4.1rem] rounded-[3px] border px-1 py-[3px] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_5px_rgba(0,0,0,0.38),0_0_0_1px_rgba(0,0,0,0.24)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-400/60'} hover:-translate-y-[0.5px]`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.12)' : 'rgba(78,78,78,0.28)' }}>
+                <div className="text-[8px] font-semibold uppercase tracking-[0.06em] leading-[1.05]">{segment.label}</div>
+                <div className="mt-[1px] flex items-center justify-center gap-0.5 text-[5px] uppercase tracking-[0.1em] text-zinc-200/80"><span>press</span><span>▾</span></div>
+                <div className="mt-[1px] flex justify-around text-[6px] uppercase tracking-[0.05em] leading-tight opacity-85">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
               </div>
             ) : (
-              <span className={`block min-w-[5.5rem] rounded-[4px] border px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
-                <span className="block">{segment.label}</span>
-                <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
+              <span className={`block min-w-[4.1rem] rounded-[3px] border px-1 py-[4px] text-center text-[8px] font-semibold uppercase tracking-[0.06em] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_5px_rgba(0,0,0,0.38),0_0_0_1px_rgba(0,0,0,0.24)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-400/60'} hover:-translate-y-[0.5px]`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.12)' : 'rgba(78,78,78,0.28)' }}>
+                <span className="block leading-[1.05]">{segment.label}</span>
+                <span className="mt-[1px] block text-[5px] uppercase tracking-[0.1em] text-zinc-200/80">press ▾</span>
               </span>
             );
 
@@ -737,10 +775,180 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'De
   );
 }
 
-export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
+function RouteAssignmentTray({
+  allowProcessorRoutes = false,
+  showRouteActions = true,
+  menu,
+  currentRoute,
+  incomingSources,
+  onOpenSumming,
+  onOpenDaw,
+  onSendToDynamics,
+  onSendToEq,
+  onAssignSumming,
+  onAssignDaw,
+}: {
+  allowProcessorRoutes?: boolean;
+  showRouteActions?: boolean;
+  menu: OutputRouteMenu;
+  currentRoute?: string | null;
+  incomingSources?: string[];
+  onOpenSumming: () => void;
+  onOpenDaw: () => void;
+  onSendToDynamics?: () => void;
+  onSendToEq?: () => void;
+  onAssignSumming: (id: string) => void;
+  onAssignDaw: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {showRouteActions && (
+        <>
+          <div className="flex flex-wrap gap-1">
+            {allowProcessorRoutes && onSendToDynamics && (
+              <ActionButton type="button" tone="violet" onClick={onSendToDynamics}>Send to dynamics</ActionButton>
+            )}
+            {allowProcessorRoutes && onSendToEq && (
+              <ActionButton type="button" tone="teal" onClick={onSendToEq}>Send to EQ / outboard</ActionButton>
+            )}
+            <ActionButton type="button" tone="amber" onClick={onOpenSumming}>Send to summing</ActionButton>
+            <ActionButton type="button" tone="blue" onClick={onOpenDaw}>Send to DAW</ActionButton>
+          </div>
+
+          {menu === 'summing' && (
+            <div className="flex flex-wrap gap-1">
+              <ActionButton type="button" onClick={() => onAssignSumming('api-164')}>API 164</ActionButton>
+              <ActionButton type="button" onClick={() => onAssignSumming('pueblo-sidewinder')}>Pueblo Sidewinder</ActionButton>
+              <ActionButton type="button" onClick={() => onAssignSumming('tonelux-otb')}>Tonelux OTB</ActionButton>
+              <ActionButton type="button" onClick={() => onAssignSumming('dbox-sum')}>D-Box+ SUM</ActionButton>
+            </div>
+          )}
+
+          {menu === 'daw' && (
+            <div className="flex flex-wrap gap-1">
+              <ActionButton type="button" onClick={() => onAssignDaw('dangerous-adplus')}>Send to Dangerous AD+</ActionButton>
+              <ActionButton type="button" onClick={() => onAssignDaw('lynx-line-in')}>Send to Lynx Line In</ActionButton>
+            </div>
+          )}
+        </>
+      )}
+
+      {currentRoute && (
+        <div className="text-[10px] text-zinc-400">Current send: {currentRoute}</div>
+      )}
+
+      {incomingSources && incomingSources.length > 0 && (
+        <div>
+          <div className="mb-1 text-silkscreen-faint text-[7px]">Receiving here</div>
+          <div className="flex flex-wrap gap-1">
+            {incomingSources.map((source) => (
+              <span key={source} className="mat-recess rounded-[2px] border border-zinc-700/30 px-2 py-0.5 text-[8px] text-zinc-300/80">
+                {source}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MixSessionPlanner({
+  perspective,
+  trackCount,
+  paths,
+  onSetTrackCount,
+  onUpdatePathDestination,
+  onInspect,
+}: {
+  perspective: Perspective;
+  trackCount: number;
+  paths: MixPathModel[];
+  onSetTrackCount: (count: number) => void;
+  onUpdatePathDestination: (pathId: string, destination: MixPathDestinationId) => void;
+  onInspect: (id: string | null) => void;
+}) {
+  const lensCopy = perspective === 'musician'
+    ? 'Choose how many tracks are leaving the DAW. Each one becomes a path you can steer toward a different feel and finish.'
+    : perspective === 'technical'
+      ? 'Declare the active DA outputs for the session. The planner below instantiates realistic analog route slots within the room\'s 24-output limit.'
+      : 'Set the number of DAW outputs in play. Each lane below becomes a live analog path with its own summing and print consequence.';
+
+  const inspectMap: Record<MixPathDestinationId, string> = {
+    'api-mix-a': 'sum-api-asm164',
+    'api-mix-b': 'sum-api-asm164',
+    'otb': 'sum-tonelux-otb',
+    'pueblo-bank-a': 'sum-pueblo-hj482',
+    'pueblo-bank-b': 'sum-pueblo-hj482',
+  };
+
+  return (
+    <div className="relative z-[1] mb-4 space-y-3 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
+      <div className="space-y-1">
+        <div className="text-silkscreen text-[8px]">Mix session setup</div>
+        <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>How many individual tracks are in your mix session?</div>
+        <p className="text-[11px] leading-relaxed text-zinc-500">{lensCopy}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          max={24}
+          value={trackCount === 0 ? '' : trackCount}
+          onChange={(event) => onSetTrackCount(Number(event.target.value || 0))}
+          placeholder="0–24"
+          className="w-20 rounded-[3px] border border-zinc-700/40 bg-zinc-950/40 px-2 py-1 text-sm text-zinc-100 outline-none"
+        />
+        <div className="flex flex-wrap gap-1">
+          {[4, 8, 16, 24].map((count) => (
+            <ActionButton key={count} type="button" tone="amber" active={trackCount === count} onClick={() => onSetTrackCount(count)}>
+              {count}
+            </ActionButton>
+          ))}
+        </div>
+        <div className="text-[10px] text-zinc-500">24 direct analog outputs are available before alternate routing logic takes over.</div>
+      </div>
+
+      {paths.length > 0 && (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {paths.map((path) => (
+            <div key={path.id} className="mat-brushed-mid rounded-[3px] border border-zinc-700/30 px-2.5 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-silkscreen-faint text-[7px]">Track {path.trackNumber}</div>
+                  <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{path.routeLabel}</div>
+                </div>
+                <ActionButton type="button" onClick={() => onInspect(inspectMap[path.destination])}>Inspect</ActionButton>
+              </div>
+              <div className="mt-1 text-[10px] text-zinc-400">{path.sourceLabel}</div>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-300/85">{path.sonicIntent}</p>
+              <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">{path.technicalNote}</p>
+              <div className="mt-2 space-y-1 text-[10px] text-zinc-400">
+                <div><span className="text-zinc-500">Print:</span> {path.printTarget}</div>
+                <div><span className="text-zinc-500">Monitor:</span> {path.monitorTarget}</div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                <ActionButton type="button" tone="amber" active={path.destination === 'api-mix-a'} onClick={() => onUpdatePathDestination(path.id, 'api-mix-a')}>Mix A</ActionButton>
+                <ActionButton type="button" tone="blue" active={path.destination === 'api-mix-b'} onClick={() => onUpdatePathDestination(path.id, 'api-mix-b')}>Mix B</ActionButton>
+                <ActionButton type="button" tone="teal" active={path.destination === 'otb'} onClick={() => onUpdatePathDestination(path.id, 'otb')}>OTB</ActionButton>
+                <ActionButton type="button" tone="cyan" active={path.destination === 'pueblo-bank-a'} onClick={() => onUpdatePathDestination(path.id, 'pueblo-bank-a')}>Pueblo A</ActionButton>
+                <ActionButton type="button" tone="violet" active={path.destination === 'pueblo-bank-b'} onClick={() => onUpdatePathDestination(path.id, 'pueblo-bank-b')}>Pueblo B</ActionButton>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, mixSessionTrackCount, mixPaths, onSetMixSessionTrackCount, onUpdateMixPathDestination, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
-    const [showCascadeView, setShowCascadeView] = useState(false);
+  const [routeMenuByKey, setRouteMenuByKey] = useState<Record<string, OutputRouteMenu>>({});
+  const [outputRoutes, setOutputRoutes] = useState<Record<string, OutputRouteChoice>>({});
+  const [showCascadeView, setShowCascadeView] = useState(false);
 
     useEffect(() => {
       const frame = window.requestAnimationFrame(() => setShowCascadeView(true));
@@ -852,6 +1060,95 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
     setOpenSectionByRow((current) => ({ ...current, [rowId]: null }));
   };
 
+  const scrollToRow = (rowId: string) => {
+    const target = scrollContainerRef.current?.querySelector<HTMLElement>(`[data-row-id="${rowId}"]`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const routeKey = (rowId: string, sectionId: string) => `${rowId}:${sectionId}`;
+  const describeSource = (rowId: string, sectionId: string) => `${routeRowLabel(rowId)} • ${sectionId.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}`;
+
+  const summingRouteChoices: OutputRouteChoice[] = [
+    { id: 'api-164', label: 'API 164', targetRowId: 'row-api-mix-out', targetSectionId: 'api-mix-a-out', inspectId: 'sum-api-asm164' },
+    { id: 'pueblo-sidewinder', label: 'Pueblo Sidewinder', targetRowId: 'row-pueblo-in', targetSectionId: 'pueblo-bank-a', inspectId: 'sum-pueblo-hj482' },
+    { id: 'tonelux-otb', label: 'Tonelux OTB', targetRowId: 'row-preamp-out', targetSectionId: 'otb16-line-inputs', inspectId: 'sum-tonelux-otb' },
+    { id: 'dbox-sum', label: 'D-Box+ SUM', targetRowId: 'row-ad-daw', targetSectionId: 'dbox-analog-in', inspectId: 'conv-dangerous-dbox' },
+  ];
+
+  const dawRouteChoices: OutputRouteChoice[] = [
+    { id: 'dangerous-adplus', label: 'Send to Dangerous AD+', targetRowId: 'row-ad-daw', targetSectionId: 'adplus-input-a', inspectId: 'conv-dangerous-adplus' },
+    { id: 'lynx-line-in', label: 'Send to Lynx Line In', targetRowId: 'row-preamp-in', targetSectionId: 'lynx-line-inputs', inspectId: 'conv-lynx-aurora' },
+  ];
+
+  const puebloRouteToDChoice: OutputRouteChoice = {
+    id: 'pueblo-route-d',
+    label: 'Route to D for stereo bus to AD+',
+    targetRowId: 'row-pueblo-in',
+    targetSectionId: 'pueblo-bank-d',
+    inspectId: 'sum-pueblo-hj482',
+  };
+
+  const parallelChainChoice: OutputRouteChoice = {
+    id: 'parallel-chain',
+    label: 'Parallel chain',
+    targetRowId: 'row-dynamics',
+  };
+
+  const setRouteMenu = (rowId: string, sectionId: string, menu: OutputRouteMenu) => {
+    setRouteMenuByKey((current) => ({ ...current, [routeKey(rowId, sectionId)]: menu }));
+  };
+
+  const assignOutputRoute = (sourceRowId: string, sectionId: string, choice: OutputRouteChoice) => {
+    setOutputRoutes((current) => ({
+      ...current,
+      [routeKey(sourceRowId, sectionId)]: choice,
+    }));
+    setRouteMenu(sourceRowId, sectionId, 'root');
+    setOpenSectionByRow((current) => ({
+      ...current,
+      [sourceRowId]: sectionId,
+      [choice.targetRowId]: choice.targetSectionId ?? current[choice.targetRowId] ?? null,
+    }));
+    scrollToRow(choice.targetRowId);
+    onInspect(choice.inspectId ?? null);
+  };
+
+  const routesFeedingSection = (sectionId: string) => Object.entries(outputRoutes)
+    .filter(([, route]) => route.targetSectionId === sectionId)
+    .map(([sourceKey, route]) => ({ sourceKey, route }));
+
+  const incomingSourcesForSection = (sectionId: string) => {
+    const matches = ['api-mix-a-out', 'api-mix-b-out', 'api-master-out'].includes(sectionId)
+      ? Object.entries(outputRoutes)
+        .filter(([, route]) => route.id === 'api-164')
+        .map(([sourceKey, route]) => ({ sourceKey, route }))
+      : routesFeedingSection(sectionId);
+
+    return matches.map(({ sourceKey }) => {
+      const [sourceRowId, sourceSectionId] = sourceKey.split(':');
+      return describeSource(sourceRowId, sourceSectionId);
+    });
+  };
+
+  const renderParallelRouteTray = (sourceRowId: string, sectionId: string) => (
+    <div className="basis-full pt-1">
+      <RouteAssignmentTray
+        menu={routeMenuByKey[routeKey(sourceRowId, sectionId)] ?? 'root'}
+        currentRoute={outputRoutes[routeKey(sourceRowId, sectionId)]?.label ?? null}
+        onOpenSumming={() => setRouteMenu(sourceRowId, sectionId, routeMenuByKey[routeKey(sourceRowId, sectionId)] === 'summing' ? 'root' : 'summing')}
+        onOpenDaw={() => setRouteMenu(sourceRowId, sectionId, routeMenuByKey[routeKey(sourceRowId, sectionId)] === 'daw' ? 'root' : 'daw')}
+        onAssignSumming={(id) => {
+          const choice = summingRouteChoices.find((entry) => entry.id === id);
+          if (choice) assignOutputRoute(sourceRowId, sectionId, choice);
+        }}
+        onAssignDaw={(id) => {
+          const choice = dawRouteChoices.find((entry) => entry.id === id);
+          if (choice) assignOutputRoute(sourceRowId, sectionId, choice);
+        }}
+      />
+    </div>
+  );
+
   const findInsertIndex = (type: InsertProcessor['type'], itemId: string) => insertChain.findIndex((processor) => processor.type === type && processor.item.id === itemId);
   const findParallelIndex = (type: ParallelProcessor['type'], itemId: string) => parallelChain.findIndex((processor) => processor.type === type && processor.item.id === itemId);
 
@@ -886,7 +1183,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
         ...preamps.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: hasStandaloneEqSection(item) ? 'cyan' as BayTone : 'blue' as BayTone, onUse: () => onSelectPreamp(item), onInspect: () => onInspect(item.id), actionLabel: 'Use preamp' })),
         ...compressors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: 'purple' as BayTone, onUse: () => toggleInsert({ type: 'compressor', item }), onInspect: () => onInspect(item.id), actionLabel: 'Insert' })),
         ...equalizers.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: 'teal' as BayTone, onUse: () => toggleInsert({ type: 'equalizer', item }), onInspect: () => onInspect(item.id), actionLabel: 'Insert EQ' })),
-        ...outboardProcessors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: item.routing_mode === 'parallel-send-return' ? 'sky' as BayTone : 'cyan' as BayTone, onUse: () => item.routing_mode === 'parallel-send-return' ? toggleParallel({ type: 'outboard', item }) : toggleInsert({ type: 'outboard', item }), onInspect: () => onInspect(item.id), actionLabel: item.routing_mode === 'parallel-send-return' ? 'Blend' : 'Insert' })),
+        ...outboardProcessors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: item.routing_mode === 'parallel-send-return' ? 'sky' as BayTone : 'cyan' as BayTone, onUse: () => item.routing_mode === 'parallel-send-return' ? toggleParallel({ type: 'outboard', item }) : toggleInsert({ type: 'outboard', item }), onInspect: () => onInspect(item.id), actionLabel: item.routing_mode === 'parallel-send-return' ? 'Parallel' : 'Insert' })),
       ].filter((entry) => `${entry.title} ${entry.subtitle}`.toLowerCase().includes(normalizedQuery)).slice(0, 8)
     : [];
   // Tie line segments — simple 1–48 numbered tie lines for Bay 0
@@ -934,10 +1231,13 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
   };
   const dawOutputTopSegments: PairedBaySegment[] = [
     { id: 'lynx-line-outputs', label: 'Lynx Line Outputs', count: 24, tone: 'blue', startNumber: 1 },
+    { id: 'otb16-output-gap', label: '', count: 8, tone: 'slate', spacer: true },
+    { id: 'otb16-transformer-out', label: 'OTB16 Transformer Out', count: 2, tone: 'red', startNumber: 33 },
+    { id: 'otb16-clean-out', label: 'OTB16 Clean Out', count: 2, tone: 'orange', startNumber: 35 },
   ];
   const dawOutputBottomSegments: PairedBaySegment[] = [
     { id: 'api-line-inputs', label: 'API Line Inputs', count: 16, tone: 'lime', startNumber: 1 },
-    { id: 'otb-stem-inputs', label: 'OTB Stem Inputs', count: 8, tone: 'amber', startNumber: 17 },
+    { id: 'otb16-line-inputs', label: 'OTB16 Line Inputs', count: 8, tone: 'amber', startNumber: 17 },
   ];
 
   const dawInputSegments: PairedBaySegment[] = [
@@ -953,8 +1253,6 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
     preampInputSegments.push({ id: 'preamp-eq-inputs', label: 'Preamp / EQ Inputs', count: preampEqChannels, tone: 'cyan', startNumber: standardPreampChannels + 1 });
   }
 
-  preampInputSegments.push({ id: 'otb16-line-inputs', label: 'OTB16 Line Inputs', count: 4, tone: 'amber', startNumber: standardPreampChannels + preampEqChannels + 1 });
-
   const preampOutputSegments: PairedBaySegment[] = [];
 
   if (standardPreamps.length > 0) {
@@ -964,8 +1262,6 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
   if (preampEqUnits.length > 0) {
     preampOutputSegments.push({ id: 'preamp-eq-outputs', label: 'Preamp / EQ Outputs', count: preampEqChannels, tone: 'teal', startNumber: standardPreampChannels + 1 });
   }
-
-  preampOutputSegments.push({ id: 'otb16-line-outputs', label: 'OTB16 Line Outputs', count: 4, tone: 'amber', startNumber: standardPreampChannels + preampEqChannels + 1 });
 
   const insertSendSegments: PairedBaySegment[] = [
     { id: 'api-insert-sends', label: 'API Insert Sends', count: 16, tone: 'violet', startNumber: 1 },
@@ -1014,10 +1310,6 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
     { id: 'pueblo-out-b', label: 'B Out', count: 2, tone: 'yellow', startNumber: 3 },
     { id: 'pueblo-out-c', label: 'C Out', count: 2, tone: 'yellow', startNumber: 5 },
     { id: 'pueblo-out-d', label: 'D Out', count: 2, tone: 'amber', startNumber: 7 },
-    { id: 'otb-ch-inputs', label: 'OTB Ch 1–8', count: 8, tone: 'orange', startNumber: 9, subLabels: ['1', '2', '3', '4', '5', '6', '7', '8'] },
-    { id: 'otb-ext-in', label: 'OTB Ext In', count: 2, tone: 'orange', startNumber: 17 },
-    { id: 'otb-main-out', label: 'OTB Main', count: 2, tone: 'red', startNumber: 19 },
-    { id: 'otb-mon-out', label: 'OTB Mon', count: 2, tone: 'orange', startNumber: 21 },
   ];
 
   // ── Bay 13: AD+ / DAW ──
@@ -1059,9 +1351,17 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
       title: 'API ASM164 Line Inputs (Ch 1–16)',
       description: 'The 16-channel summing mixer\'s direct line inputs, receiving Aurora outputs 1–16 via inline Tilt EQs (hardwired outside the patchbay). API 2510 input op-amps and 2520 output op-amps built to MIL-Spec standard. Each channel has per-channel panning, 31-step detented level control, and an always-active insert send/return. Signals are assigned to the Mix A or Mix B stereo program bus.',
     },
-    'otb-stem-inputs': {
-      title: 'Tonelux OTB-16 Stem Inputs (Ch 1–8)',
-      description: 'Eight overflow stem channels from Aurora outputs 17–24. The OTB sums these stems together with the FX tributary arriving on its external input and stamps the combined result through its TX-100 output transformer before feeding the API external input. Per-channel level and pan. TX-240/TX-260 discrete op-amp summing topology.',
+    'otb16-line-inputs': {
+      title: 'Tonelux OTB-16 Line Inputs (Ch 1–8)',
+      description: 'Eight overflow stem channels from Aurora outputs 17–24. The OTB sums these stems together with the FX tributary arriving on its external input and can feed either its transformer-colored output or the cleaner output path before rejoining the rest of the system.',
+    },
+    'otb16-transformer-out': {
+      title: 'Tonelux OTB-16 Transformer Output',
+      description: 'The transformer-coupled stereo output of the OTB-16. This is the more characterful print of the OTB stem sum, with the Tonelux output iron adding density and harmonic texture before the signal heads onward.',
+    },
+    'otb16-clean-out': {
+      title: 'Tonelux OTB-16 Clean Output',
+      description: 'The cleaner stereo output path from the OTB-16, useful when the extra routing flexibility is wanted without leaning on the transformer color of the main Tonelux output stage.',
     },
     // Bay 4 — Insert Sends / Returns
     'api-insert-sends': {
@@ -1196,23 +1496,6 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
       title: 'Pueblo Bank D Stereo Output → AD+ Input B',
       description: 'The primary output of the cascade chain. When all banks cascade, this carries the full 32-input sum. Hardwired to Dangerous AD+ Input B — always ready as the clean print path. With optional transformers engaged, this is the one point in the Pueblo where iron can enter the signal.',
     },
-    'otb-ch-inputs': {
-      title: 'Tonelux OTB-16 Channel Inputs (1–8)',
-      description: 'Eight stereo stem inputs from Aurora(n) outputs 17–24. Per-channel level and pan controls. TX-240/TX-260 discrete op-amp summing topology. These are the overflow DAW stems that exceed the API\'s 16-channel capacity — additional instrument groups, stem buses, or background layers.',
-    },
-    'otb-ext-in': {
-      title: 'Tonelux OTB-16 External Input',
-      description: 'Stereo external input that receives the D-Box+ summing output. This is where the FX tributary (reverbs, delays, spatial processors) re-enters the main analog path. The external input signal is summed with the OTB\'s eight stem channels before the output stage.',
-    },
-    'otb-main-out': {
-      title: 'Tonelux OTB-16 Main Output (Transformer)',
-      description: 'Transformer-balanced stereo output through the TX-100 output transformer. This is the "iron" output — the combined stems + FX tributary pass through Hammond iron, adding warmth, cohesion, and gentle transient rounding. Feeds the API external input, merging the tributary into the console.',
-    },
-    'otb-mon-out': {
-      title: 'Tonelux OTB-16 Monitor Output (Clean)',
-      description: 'Unbalanced stereo output that bypasses the TX-100 output transformer. Same summed signal without the iron coloration — useful for A/B comparison of the transformer\'s contribution or for feeding a destination that needs the clean version.',
-    },
-
     // ── Bay 13: AD+ / DAW ──
     'adplus-input-a': {
       title: 'Dangerous AD+ Input A (API Print Path)',
@@ -1275,6 +1558,17 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
         insertChain={insertChain}
         parallelChain={parallelChain}
       />
+
+      {mode === 'mixing' && (
+        <MixSessionPlanner
+          perspective={perspective}
+          trackCount={mixSessionTrackCount}
+          paths={mixPaths}
+          onSetTrackCount={onSetMixSessionTrackCount}
+          onUpdatePathDestination={onUpdateMixPathDestination}
+          onInspect={onInspect}
+        />
+      )}
 
       {normalizedQuery && (
         <div className="relative z-[1] mb-4 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
@@ -1426,7 +1720,16 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
 
                 {openSection && openSection === 'lynx-line-inputs' && (
                   <DetailTray title={segmentInfo['lynx-line-inputs'].title} caption={segmentInfo['lynx-line-inputs'].description} toneClass="border-green-900/20 bg-green-950/8" onClose={() => clearOpenSection(row.id)}>
-                    <div />
+                    <RouteAssignmentTray
+                      showRouteActions={false}
+                      menu="root"
+                      currentRoute={null}
+                      incomingSources={incomingSourcesForSection('lynx-line-inputs')}
+                      onOpenSumming={() => undefined}
+                      onOpenDaw={() => undefined}
+                      onAssignSumming={() => undefined}
+                      onAssignDaw={() => undefined}
+                    />
                   </DetailTray>
                 )}
               </RowShell>
@@ -1436,14 +1739,36 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
           if (row.id === 'row-preamp-out') {
             const openSection = openSectionByRow[row.id] ?? null;
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
+            const isOutputSource = openSection ? ['lynx-line-outputs', 'otb16-transformer-out', 'otb16-clean-out'].includes(openSection) : false;
 
             return (
               <RowShell key={row.id} rowId={row.id} order="2" label="DAW OUTPUTS / CONSOLE INPUTS" active={active} isNext={isNext} mode={mode}>
                 <PhysicalPairedBay topSegments={dawOutputTopSegments} bottomSegments={dawOutputBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
-                {activeInfo && (
+                {activeInfo && openSection && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/20 bg-blue-950/8" onClose={() => clearOpenSection(row.id)}>
-                    <div />
+                    <RouteAssignmentTray
+                      showRouteActions={isOutputSource}
+                      menu={isOutputSource ? (routeMenuByKey[routeKey(row.id, openSection)] ?? 'root') : 'root'}
+                      currentRoute={outputRoutes[routeKey(row.id, openSection)]?.label ?? null}
+                      incomingSources={incomingSourcesForSection(openSection)}
+                      onOpenSumming={() => {
+                        if (isOutputSource) setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'summing' ? 'root' : 'summing');
+                      }}
+                      onOpenDaw={() => {
+                        if (isOutputSource) setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'daw' ? 'root' : 'daw');
+                      }}
+                      onAssignSumming={(id) => {
+                        if (!isOutputSource) return;
+                        const choice = summingRouteChoices.find((entry) => entry.id === id);
+                        if (choice) assignOutputRoute(row.id, openSection, choice);
+                      }}
+                      onAssignDaw={(id) => {
+                        if (!isOutputSource) return;
+                        const choice = dawRouteChoices.find((entry) => entry.id === id);
+                        if (choice) assignOutputRoute(row.id, openSection, choice);
+                      }}
+                    />
                   </DetailTray>
                 )}
               </RowShell>
@@ -1458,9 +1783,25 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
               <RowShell key={row.id} rowId={row.id} order="3" label="INSERT SENDS / RETURNS" active={active} isNext={isNext} mode={mode}>
                 <PhysicalPairedBay topSegments={insertSendSegments} bottomSegments={insertReturnSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
-                {activeInfo && (
+                {activeInfo && openSection && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-violet-900/20 bg-violet-950/8" onClose={() => clearOpenSection(row.id)}>
-                    <div />
+                    <RouteAssignmentTray
+                      allowProcessorRoutes
+                      menu={routeMenuByKey[routeKey(row.id, openSection)] ?? 'root'}
+                      currentRoute={outputRoutes[routeKey(row.id, openSection)]?.label ?? null}
+                      onOpenSumming={() => setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'summing' ? 'root' : 'summing')}
+                      onOpenDaw={() => setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'daw' ? 'root' : 'daw')}
+                      onSendToDynamics={() => { scrollToRow('row-dynamics'); }}
+                      onSendToEq={() => { scrollToRow('row-eq'); }}
+                      onAssignSumming={(id) => {
+                        const choice = summingRouteChoices.find((entry) => entry.id === id);
+                        if (choice) assignOutputRoute(row.id, openSection, choice);
+                      }}
+                      onAssignDaw={(id) => {
+                        const choice = dawRouteChoices.find((entry) => entry.id === id);
+                        if (choice) assignOutputRoute(row.id, openSection, choice);
+                      }}
+                    />
                   </DetailTray>
                 )}
               </RowShell>
@@ -1476,7 +1817,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                 <SectionMarker title="Outboard field" subtitle="Dynamics, equalizers, and returns live here. Nothing needs to be patched unless the sound genuinely benefits from it." />
                 <RowShell rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
                   {activeGroup && (
-                    <DetailTray title={`${activeGroup.label} compressors`} caption="Add patch inserts the unit into the direct path. Blend keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/20 bg-purple-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
+                    <DetailTray title={`${activeGroup.label} compressors`} caption="Add patch inserts the unit into the direct path. Parallel keeps the dry route intact and opens a routed side branch." toneClass="border-purple-900/20 bg-purple-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
                       <div className="grid grid-cols-2 gap-1.5">
                         {activeGroup.items.map((compressor) => {
                           const insertSelected = insertChain.some((processor) => processor.type === 'compressor' && processor.item.id === compressor.id);
@@ -1495,7 +1836,12 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                               onPrimary={() => { toggleInsert({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}
                               detailLabel="Details"
                               onInspect={() => onInspect(compressor.id)}
-                              extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => { toggleParallel({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}>{parallelSelected ? 'Remove' : 'Blend'}</ActionButton>}
+                              extraAction={(
+                                <>
+                                  <ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => { toggleParallel({ type: 'compressor', item: compressor }); }}>Parallel</ActionButton>
+                                  {parallelSelected && renderParallelRouteTray(row.id, compressor.id)}
+                                </>
+                              )}
                             />
                           );
                         })}
@@ -1534,7 +1880,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
               : activeEntry?.category === 'inline'
                 ? { title: `${activeEntry.label} inline processors`, caption: 'These units patch straight into the main route when the chain needs more deliberate color or spatial shaping.', toneClass: 'border-cyan-900/60 bg-cyan-950/18' }
                 : activeEntry?.category === 'fx'
-                  ? { title: `${activeEntry.label} returns`, caption: 'Blend is the primary action here because these processors are meant to supplement the direct chain rather than replace it.', toneClass: 'border-sky-900/60 bg-sky-950/18' }
+                  ? { title: `${activeEntry.label} returns`, caption: 'Parallel is the primary action here because these processors are meant to supplement the direct chain rather than replace it.', toneClass: 'border-sky-900/60 bg-sky-950/18' }
                   : null;
 
             return (
@@ -1578,10 +1924,11 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                           title={processor.name}
                           meta={compactMeta([(processor as any).type, (processor as any).format, `${processor.channels}ch`])}
                           selected={parallelIds.has(processor.id)}
-                          primaryLabel={parallelIds.has(processor.id) ? 'Remove' : 'Blend'}
-                          onPrimary={() => { toggleParallel({ type: 'outboard', item: processor as any }); clearOpenSection(row.id); }}
+                          primaryLabel="Parallel"
+                          onPrimary={() => { toggleParallel({ type: 'outboard', item: processor as any }); }}
                           detailLabel="Details"
                           onInspect={() => onInspect(processor.id)}
+                          extraAction={parallelIds.has(processor.id) ? renderParallelRouteTray(row.id, processor.id) : undefined}
                         />
                       ))}
                     </div>
@@ -1603,9 +1950,23 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                 <RowShell rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
                   <PhysicalPairedBay topSegments={apiMixTopSegments} bottomSegments={apiMixBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
-                  {activeInfo && (
+                  {activeInfo && openSection && (
                     <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-amber-900/20 bg-amber-950/8" onClose={() => clearOpenSection(row.id)}>
-                      <div />
+                      <RouteAssignmentTray
+                        menu={routeMenuByKey[routeKey(row.id, openSection)] ?? 'root'}
+                        currentRoute={outputRoutes[routeKey(row.id, openSection)]?.label ?? null}
+                        incomingSources={incomingSourcesForSection(openSection)}
+                        onOpenSumming={() => setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'summing' ? 'root' : 'summing')}
+                        onOpenDaw={() => setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'daw' ? 'root' : 'daw')}
+                        onAssignSumming={(id) => {
+                          const choice = summingRouteChoices.find((entry) => entry.id === id);
+                          if (choice) assignOutputRoute(row.id, openSection, choice);
+                        }}
+                        onAssignDaw={(id) => {
+                          const choice = dawRouteChoices.find((entry) => entry.id === id);
+                          if (choice) assignOutputRoute(row.id, openSection, choice);
+                        }}
+                      />
                     </DetailTray>
                   )}
                 </RowShell>
@@ -1616,14 +1977,53 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
           if (row.id === 'row-pueblo-in') {
             const openSection = openSectionByRow[row.id] ?? null;
             const activeInfo = openSection ? segmentInfo[openSection] ?? null : null;
+            const isPuebloStemOut = openSection ? ['pueblo-out-a', 'pueblo-out-b', 'pueblo-out-c'].includes(openSection) : false;
+            const isPuebloDestination = openSection ? ['pueblo-out-d', 'pueblo-bank-d'].includes(openSection) : false;
 
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
                 <PhysicalPairedBay topSegments={puebloTopSegments} bottomSegments={puebloBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="half-normal" />
 
-                {activeInfo && (
+                {activeInfo && openSection && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-yellow-900/20 bg-yellow-950/8" onClose={() => clearOpenSection(row.id)}>
-                    <div />
+                    {isPuebloStemOut ? (
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          <ActionButton type="button" tone="amber" onClick={() => assignOutputRoute(row.id, openSection, puebloRouteToDChoice)}>ROUTE TO D for STEREO BUS TO AD+</ActionButton>
+                          <ActionButton type="button" tone="cyan" onClick={() => assignOutputRoute(row.id, openSection, parallelChainChoice)}>ROUTE AS PARALLEL CHAIN</ActionButton>
+                        </div>
+                        {outputRoutes[routeKey(row.id, openSection)]?.label && (
+                          <div className="text-[10px] text-zinc-400">Current send: {outputRoutes[routeKey(row.id, openSection)]?.label}</div>
+                        )}
+                        {incomingSourcesForSection(openSection).length > 0 && (
+                          <div>
+                            <div className="mb-1 text-silkscreen-faint text-[7px]">Receiving here</div>
+                            <div className="flex flex-wrap gap-1">
+                              {incomingSourcesForSection(openSection).map((source) => (
+                                <span key={source} className="mat-recess rounded-[2px] border border-zinc-700/30 px-2 py-0.5 text-[8px] text-zinc-300/80">{source}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <RouteAssignmentTray
+                        showRouteActions={!isPuebloDestination}
+                        menu={routeMenuByKey[routeKey(row.id, openSection)] ?? 'root'}
+                        currentRoute={outputRoutes[routeKey(row.id, openSection)]?.label ?? null}
+                        incomingSources={incomingSourcesForSection(openSection)}
+                        onOpenSumming={() => setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'summing' ? 'root' : 'summing')}
+                        onOpenDaw={() => setRouteMenu(row.id, openSection, routeMenuByKey[routeKey(row.id, openSection)] === 'daw' ? 'root' : 'daw')}
+                        onAssignSumming={(id) => {
+                          const choice = summingRouteChoices.find((entry) => entry.id === id);
+                          if (choice) assignOutputRoute(row.id, openSection, choice);
+                        }}
+                        onAssignDaw={(id) => {
+                          const choice = dawRouteChoices.find((entry) => entry.id === id);
+                          if (choice) assignOutputRoute(row.id, openSection, choice);
+                        }}
+                      />
+                    )}
                   </DetailTray>
                 )}
               </RowShell>
@@ -1638,9 +2038,18 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
                 <PhysicalPairedBay topSegments={adDawTopSegments} bottomSegments={adDawBottomSegments} openSegmentId={openSection} onSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)} normalMode="patch-only" />
 
-                {activeInfo && (
+                {activeInfo && openSection && (
                   <DetailTray title={activeInfo.title} caption={activeInfo.description} toneClass="border-blue-900/20 bg-blue-950/8" onClose={() => clearOpenSection(row.id)}>
-                    <div />
+                    <RouteAssignmentTray
+                      showRouteActions={false}
+                      menu="root"
+                      currentRoute={null}
+                      incomingSources={incomingSourcesForSection(openSection)}
+                      onOpenSumming={() => undefined}
+                      onOpenDaw={() => undefined}
+                      onAssignSumming={() => undefined}
+                      onAssignDaw={() => undefined}
+                    />
                   </DetailTray>
                 )}
               </RowShell>

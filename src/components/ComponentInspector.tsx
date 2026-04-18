@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Perspective, Microphone, Preamp, Compressor, Equalizer, OutboardProcessor, SummingNode, MonitorSpeaker } from '../types/studio';
+import type { Perspective, Microphone, Preamp, Compressor, Equalizer, OutboardProcessor, SummingNode, MonitorSpeaker, Converter, SummingUnit } from '../types/studio';
 import GearSilhouette from './GearSilhouette';
 import { gearImage } from '../utils/gearImage';
 import { microphones } from '../data/microphones';
@@ -7,6 +7,7 @@ import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
 import { equalizers } from '../data/equalizers';
 import { outboardProcessors } from '../data/outboard';
+import { converters, summingUnits } from '../data/studio';
 import { cascadeNodes, monitorSpeakers, nodeZones } from '../data/cascade';
 import { nodeConsequence, roleLabel } from './CascadeView';
 import { getContextTags } from '../engine/studioViewModel';
@@ -737,6 +738,62 @@ function OutboardInspector({ proc, perspective }: { proc: OutboardProcessor; per
   );
 }
 
+function StudioConverterInspector({ converter, perspective }: { converter: Converter; perspective: Perspective }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3">
+        <GearImage id={converter.id} category="outboard" accent="#60a5fa" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{converter.name}</h3>
+          <div className="text-xs text-zinc-500">{converter.vendor} · {converter.type} · {converter.channels}ch</div>
+        </div>
+      </div>
+
+      <Section title={perspective === 'technical' ? 'Engineering' : 'Unit Details'}>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+          {perspective === 'technical' ? converter.engineering : converter.character}
+        </p>
+      </Section>
+
+      <Section title="Specifications">
+        <Spec label="Channels" value={converter.channels} />
+        <Spec label="Dynamic Range" value={`${converter.dynamic_range_db} dB`} />
+        <Spec label="Bit Depths" value={converter.bit_depths.join(', ')} />
+        <Spec label="Sample Rates" value={converter.sample_rates.map((rate) => rate >= 1000 ? `${rate / 1000}k` : `${rate}`).join(', ')} />
+        <Spec label="Clocking" value={converter.clocking} />
+        <Spec label="Rack Space" value={`${converter.rack_units}U`} />
+        <Spec label="EM Zone" value={converter.em_zone} />
+      </Section>
+    </div>
+  );
+}
+
+function StudioSummingUnitInspector({ unit, perspective }: { unit: SummingUnit; perspective: Perspective }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3">
+        <GearImage id={unit.id} category="outboard" accent="#fbbf24" />
+        <div>
+          <h3 className="text-lg font-bold" style={{ color: 'var(--sa-cream)' }}>{unit.name}</h3>
+          <div className="text-xs text-zinc-500">{unit.vendor} · {unit.inputs} in / {unit.outputs} out</div>
+        </div>
+      </div>
+
+      <Section title={perspective === 'technical' ? 'Engineering' : 'Unit Details'}>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+          {perspective === 'technical' ? unit.engineering : unit.character}
+        </p>
+      </Section>
+
+      <Section title="Specifications">
+        <Spec label="Inputs" value={unit.inputs} />
+        <Spec label="Outputs" value={unit.outputs} />
+        <Spec label="Rack Space" value={`${unit.rack_units}U`} />
+      </Section>
+    </div>
+  );
+}
+
 function SummingNodeInspector({ node, perspective }: { node: SummingNode; perspective: Perspective }) {
   const zones = nodeZones.filter(z => z.node_id === node.id);
   const [activeZone, setActiveZone] = useState<string | null>(null);
@@ -888,6 +945,8 @@ export default function ComponentInspector({ perspective, inspectedId, onInspect
   const comp = compressors.find(c => c.id === inspectedId);
   const eq = equalizers.find(e => e.id === inspectedId);
   const outboard = outboardProcessors.find(o => o.id === inspectedId);
+  const converter = converters.find(c => c.id === inspectedId);
+  const summingUnit = summingUnits.find(s => s.id === inspectedId);
   const cascadeNode = cascadeNodes.find(n => n.id === inspectedId);
   const speaker = monitorSpeakers.find(s => s.id === inspectedId);
   const inspectable = mic ?? pre ?? comp ?? eq ?? outboard;
@@ -896,7 +955,7 @@ export default function ComponentInspector({ perspective, inspectedId, onInspect
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-silkscreen text-[8px]">
-          {mic ? 'Microphone' : pre ? 'Preamp' : comp ? 'Compressor' : eq ? 'Equalizer' : outboard ? 'Outboard' : cascadeNode ? 'Signal Path' : speaker ? 'Monitor' : 'Component'}
+          {mic ? 'Microphone' : pre ? 'Preamp' : comp ? 'Compressor' : eq ? 'Equalizer' : outboard ? 'Outboard' : converter ? 'Converter' : summingUnit ? 'Summing' : cascadeNode ? 'Signal Path' : speaker ? 'Monitor' : 'Component'}
         </span>
         <button
           onClick={onClose}
@@ -911,11 +970,13 @@ export default function ComponentInspector({ perspective, inspectedId, onInspect
       {comp && <CompInspector comp={comp} perspective={perspective} />}
       {eq && <EQInspector eq={eq} perspective={perspective} />}
       {outboard && <OutboardInspector proc={outboard} perspective={perspective} />}
+      {converter && <StudioConverterInspector converter={converter} perspective={perspective} />}
+      {summingUnit && <StudioSummingUnitInspector unit={summingUnit} perspective={perspective} />}
       {cascadeNode && <SummingNodeInspector node={cascadeNode} perspective={perspective} />}
       {speaker && <MonitorSpeakerInspector speaker={speaker} perspective={perspective} />}
       {inspectable && <AlternativeSection component={inspectable} onInspect={onInspect} />}
 
-      {!mic && !pre && !comp && !eq && !outboard && !cascadeNode && !speaker && (
+      {!mic && !pre && !comp && !eq && !outboard && !converter && !summingUnit && !cascadeNode && !speaker && (
         <div className="text-sm text-zinc-500">Component not found: {inspectedId}</div>
       )}
     </div>

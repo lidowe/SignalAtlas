@@ -12,6 +12,8 @@ import type {
   RouteStageSummary,
   RouteSummaryModel,
   RouteValidationIssue,
+  MixPathModel,
+  StudioMode,
 } from '../types/studio';
 
 type DescribedComponent = Microphone | Preamp | Compressor | Equalizer | OutboardProcessor;
@@ -96,17 +98,139 @@ function buildGainMarginSummary(mic: Microphone | null, preamp: Preamp | null): 
   return `${margin.toFixed(0)}dB headroom remaining — comfortable gain range`;
 }
 
+function buildMixDestinationCounts(mixPaths: MixPathModel[]) {
+  return {
+    apiMixA: mixPaths.filter((path) => path.destination === 'api-mix-a').length,
+    apiMixB: mixPaths.filter((path) => path.destination === 'api-mix-b').length,
+    otb: mixPaths.filter((path) => path.destination === 'otb').length,
+    puebloA: mixPaths.filter((path) => path.destination === 'pueblo-bank-a').length,
+    puebloB: mixPaths.filter((path) => path.destination === 'pueblo-bank-b').length,
+  };
+}
+
+function buildMixHeadline(mixPaths: MixPathModel[]): string {
+  const counts = buildMixDestinationCounts(mixPaths);
+  const parts = [
+    counts.apiMixA > 0 ? `${counts.apiMixA} to Mix A` : null,
+    counts.apiMixB > 0 ? `${counts.apiMixB} to Mix B` : null,
+    counts.otb > 0 ? `${counts.otb} to OTB` : null,
+    counts.puebloA > 0 ? `${counts.puebloA} to Pueblo A` : null,
+    counts.puebloB > 0 ? `${counts.puebloB} to Pueblo B` : null,
+  ].filter(Boolean);
+
+  return `${mixPaths.length} DAW track${mixPaths.length === 1 ? '' : 's'} → ${parts.join(' • ')} → print + monitor`;
+}
+
+function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
+  const counts = buildMixDestinationCounts(mixPaths);
+  const path: RouteStageSummary[] = [
+    {
+      id: 'mix-daw-playback',
+      label: `DAW playback (${mixPaths.length})`,
+      type: 'converter',
+      detail: 'Lynx outputs feeding the analog mix structure',
+    },
+  ];
+
+  if (counts.apiMixA > 0) {
+    path.push({
+      id: 'mix-api-a',
+      label: `API Mix A (${counts.apiMixA})`,
+      type: 'summing',
+      detail: 'Primary punch-forward console bus',
+    });
+  }
+
+  if (counts.apiMixB > 0) {
+    path.push({
+      id: 'mix-api-b',
+      label: `API Mix B (${counts.apiMixB})`,
+      type: 'summing',
+      detail: 'Secondary bus for alternate balance or stem handling',
+    });
+  }
+
+  if (counts.otb > 0) {
+    path.push({
+      id: 'mix-otb',
+      label: `OTB tributary (${counts.otb})`,
+      type: 'summing',
+      detail: 'Overflow color lane that rejoins the console path',
+    });
+  }
+
+  if (counts.puebloA + counts.puebloB > 0) {
+    path.push({
+      id: 'mix-pueblo-open',
+      label: `Open Pueblo lanes (${counts.puebloA + counts.puebloB})`,
+      type: 'summing',
+      detail: 'Independent active branches awaiting the user’s onward decision',
+    });
+  }
+
+  path.push({
+    id: 'mix-print-monitor',
+    label: 'Print + monitor tail',
+    type: 'converter',
+    detail: 'Dangerous AD+ print path with D-Box+ monitoring',
+  });
+
+  return path;
+}
+
 export function buildRouteSummary(
   mic: Microphone | null,
   preamp: Preamp | null,
   inserts: InsertProcessor[],
   parallelProcessors: ParallelProcessor[],
   analysis: ChainAnalysis | null,
-  _validationIssues: RouteValidationIssue[] = []
+  _validationIssues: RouteValidationIssue[] = [],
+  mode: StudioMode = 'tracking',
+  mixPaths: MixPathModel[] = []
 ): RouteSummaryModel {
   const active_path = buildActivePath(mic, preamp, inserts);
   const parallel_paths = buildParallelPaths(parallelProcessors);
   const gain_margin_summary = buildGainMarginSummary(mic, preamp);
+
+  if (mode === 'mixing' && mixPaths.length > 0) {
+    const counts = buildMixDestinationCounts(mixPaths);
+    const openLaneCount = counts.puebloA + counts.puebloB;
+    const deviations: string[] = [];
+
+    if (counts.apiMixB > 0) {
+      deviations.push(`${counts.apiMixB} track${counts.apiMixB === 1 ? ' is' : 's are'} riding Mix B for alternate balance, overflow, or stem handling.`);
+    }
+    if (counts.otb > 0) {
+      deviations.push(`${counts.otb} track${counts.otb === 1 ? ' is' : 's are'} leaving the main console lane for the OTB tributary before rejoining the print path.`);
+    }
+    if (openLaneCount > 0) {
+      deviations.push(`${openLaneCount} track${openLaneCount === 1 ? ' remains' : 's remain'} on open Pueblo branches, so their final re-entry or print decision is still user-directed.`);
+    }
+    if (parallelProcessors.length > 0) {
+      deviations.push(`${parallelProcessors.length} parallel ${parallelProcessors.length === 1 ? 'branch supplements' : 'branches supplement'} the main mix architecture.`);
+    }
+
+    return {
+      status: deviations.length > 0 ? 'custom' : 'default',
+      headline: buildMixHeadline(mixPaths),
+      viability_flag: {
+        level: openLaneCount > 0 ? 'caution' : 'ok',
+        reason: openLaneCount > 0
+          ? 'Open Pueblo lanes are active, so the session still contains intentionally unresolved print choices.'
+          : counts.otb > 0
+            ? 'The session is split between the main console bus and the OTB tributary, adding a second analog color path before print.'
+            : 'The session is flowing through the primary analog bus structure toward the default print and monitor chain.',
+      },
+      gain_margin_summary: undefined,
+      validation_issues: [],
+      active_path: buildMixActivePath(mixPaths),
+      parallel_paths,
+      deviations,
+      available_next_actions: openLaneCount > 0
+        ? ['Decide how the open Pueblo lanes rejoin or print', 'Inspect the active summing destination']
+        : ['Inspect the active summing destination', 'Compare print path against the monitor path'],
+    };
+  }
 
   // ── Default continuation after the user's selections ──
   const defaultContinuation = 'API Mix A bus → AD+ converter → DAW';
@@ -182,8 +306,48 @@ export function buildRouteSummary(
 
 export function buildPerspectiveInsights(
   perspective: Perspective,
-  analysis: ChainAnalysis | null
+  analysis: ChainAnalysis | null,
+  mode: StudioMode = 'tracking',
+  mixPaths: MixPathModel[] = []
 ): PerspectiveInsightModel {
+  if (mode === 'mixing' && mixPaths.length > 0) {
+    const counts = buildMixDestinationCounts(mixPaths);
+    const openLaneCount = counts.puebloA + counts.puebloB;
+    const routingNotes = [
+      counts.apiMixA > 0 ? `${counts.apiMixA} on Mix A` : null,
+      counts.apiMixB > 0 ? `${counts.apiMixB} on Mix B` : null,
+      counts.otb > 0 ? `${counts.otb} on OTB` : null,
+      openLaneCount > 0 ? `${openLaneCount} on open Pueblo lanes` : null,
+    ].filter(Boolean).join(', ');
+
+    if (perspective === 'musician') {
+      return {
+        perspective,
+        summary: openLaneCount > 0
+          ? `The mix is no longer one single center lane — ${routingNotes}. You are shaping contrasts between punch, openness, and separate stems before the final print choice.`
+          : `The mix is moving as a deliberate bus performance now — ${routingNotes}. The route itself is part of the feel, not just the gear choices inside it.`,
+        warnings: [],
+        notes: [],
+      };
+    }
+
+    if (perspective === 'engineer') {
+      return {
+        perspective,
+        summary: `${mixPaths.length} DA outputs are active: ${routingNotes}. This is now a bus-allocation problem with print consequences, not a single stereo afterthought.`,
+        warnings: [],
+        notes: [],
+      };
+    }
+
+    return {
+      perspective,
+      summary: `${mixPaths.length} analog playback lanes are instantiated across the summing network: ${routingNotes}. Monitoring remains downstream of the print branch through the D-Box+ path.`,
+      warnings: [],
+      notes: [],
+    };
+  }
+
   if (!analysis) {
     return {
       perspective,

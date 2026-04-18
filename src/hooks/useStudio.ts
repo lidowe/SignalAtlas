@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature } from '../types/studio';
+import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature, MixPathModel, MixPathDestinationId } from '../types/studio';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
@@ -49,6 +49,80 @@ function buildDefaultParallelProcessor(proc: ParallelProcessorInput): ParallelPr
   };
 }
 
+function buildMixPathModel(trackNumber: number, destination?: MixPathDestinationId): MixPathModel {
+  const resolvedDestination = destination ?? (trackNumber <= 16 ? 'api-mix-a' : 'otb');
+  const sourceLabel = `Lynx / DAW out ${trackNumber}`;
+
+  switch (resolvedDestination) {
+    case 'api-mix-b':
+      return {
+        id: `mix-path-${trackNumber}`,
+        trackNumber,
+        sourceLabel,
+        routeLabel: 'API Mix B',
+        destination: resolvedDestination,
+        sonicIntent: 'Keeps the track on the secondary bus for alternate balance, overflow, or parallel stem handling.',
+        technicalNote: 'Routes through the second API program bus, typically onward to Pueblo Bank D and the cleaner print branch.',
+        printTarget: 'Pueblo Bank D → AD+ input B',
+        monitorTarget: 'D-Box+ AES monitor path',
+      };
+    case 'otb':
+      return {
+        id: `mix-path-${trackNumber}`,
+        trackNumber,
+        sourceLabel,
+        routeLabel: 'Tonelux OTB tributary',
+        destination: resolvedDestination,
+        sonicIntent: 'Uses the OTB overflow path to add separate summing color before the signal rejoins the broader mix.',
+        technicalNote: 'Best fit for outputs above the first 16 channels; transformer color and bus reinjection stay available.',
+        printTarget: 'OTB tributary → API external / insert return path',
+        monitorTarget: 'D-Box+ monitor after the summed bus',
+      };
+    case 'pueblo-bank-a':
+      return {
+        id: `mix-path-${trackNumber}`,
+        trackNumber,
+        sourceLabel,
+        routeLabel: 'Pueblo Bank A',
+        destination: resolvedDestination,
+        sonicIntent: 'Opens an independent, cleaner parallel summing lane that can stay separate from the main print path.',
+        technicalNote: 'Feeds an open Pueblo bank directly; useful when the user wants independent routing rather than immediate bus reinsertion.',
+        printTarget: 'Independent Pueblo output, not the default print tail',
+        monitorTarget: 'D-Box+ via the chosen monitor source',
+      };
+    case 'pueblo-bank-b':
+      return {
+        id: `mix-path-${trackNumber}`,
+        trackNumber,
+        sourceLabel,
+        routeLabel: 'Pueblo Bank B',
+        destination: resolvedDestination,
+        sonicIntent: 'Builds a second open Pueblo path for a separate stem or branch that can later be compared or cascaded.',
+        technicalNote: 'Preserves an independent active summing lane and keeps the route outside the default API bus print path.',
+        printTarget: 'Independent Pueblo output, manually directed onward',
+        monitorTarget: 'D-Box+ via the chosen monitor source',
+      };
+    case 'api-mix-a':
+    default:
+      return {
+        id: `mix-path-${trackNumber}`,
+        trackNumber,
+        sourceLabel,
+        routeLabel: 'API Mix A',
+        destination: 'api-mix-a',
+        sonicIntent: 'Keeps the track on the main console path for the punchier, more centered API bus result.',
+        technicalNote: 'Uses the primary 16-channel summing route and heads toward the default print path with about a 4 dB API-to-AD+ headroom gap.',
+        printTarget: 'Pueblo Bank C / API print path → AD+ input A',
+        monitorTarget: 'D-Box+ AES monitor path',
+      };
+  }
+}
+
+function buildMixPaths(trackCount: number): MixPathModel[] {
+  const clamped = Math.max(0, Math.min(24, trackCount));
+  return Array.from({ length: clamped }, (_, index) => buildMixPathModel(index + 1));
+}
+
 export interface StudioState {
   perspective: Perspective;
   mode: StudioMode;
@@ -62,17 +136,19 @@ export interface StudioState {
   routeValidation: RouteValidationIssue[];
   routeSummary: RouteSummaryModel;
   perspectiveInsights: Record<Perspective, PerspectiveInsightModel>;
+  mixSessionTrackCount: number;
+  mixPaths: MixPathModel[];
 
   sonicSignature: SonicSignature;
   inspectedId: string | null;
   searchQuery: string;
 }
 
-function buildInsights(analysis: ChainAnalysis | null): Record<Perspective, PerspectiveInsightModel> {
+function buildInsights(analysis: ChainAnalysis | null, mode: StudioMode, mixPaths: MixPathModel[]): Record<Perspective, PerspectiveInsightModel> {
   return {
-    musician: buildPerspectiveInsights('musician', analysis),
-    engineer: buildPerspectiveInsights('engineer', analysis),
-    technical: buildPerspectiveInsights('technical', analysis),
+    musician: buildPerspectiveInsights('musician', analysis, mode, mixPaths),
+    engineer: buildPerspectiveInsights('engineer', analysis, mode, mixPaths),
+    technical: buildPerspectiveInsights('technical', analysis, mode, mixPaths),
   };
 }
 
@@ -91,16 +167,51 @@ export function useStudio() {
     analysis: null,
     patchGraph: initialPatchGraph,
     routeValidation: initialRouteValidation,
-    routeSummary: buildRouteSummary(null, null, [], [], null, initialRouteValidation),
-    perspectiveInsights: buildInsights(null),
+    routeSummary: buildRouteSummary(null, null, [], [], null, initialRouteValidation, 'tracking', []),
+    perspectiveInsights: buildInsights(null, 'tracking', []),
+    mixSessionTrackCount: 0,
+    mixPaths: [],
     sonicSignature: buildSonicSignature(null, null, []),
     inspectedId: null,
     searchQuery: '',
   });
 
   const setPerspective = useCallback((p: Perspective) => setState(s => ({ ...s, perspective: p })), []);
-  const setMode = useCallback((m: StudioMode) => setState(s => ({ ...s, mode: m })), []);
+  const setMode = useCallback((m: StudioMode) => setState(s => ({
+    ...s,
+    mode: m,
+    routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, s.parallelChain, s.analysis, s.routeValidation, m, s.mixPaths),
+    perspectiveInsights: buildInsights(s.analysis, m, s.mixPaths),
+  })), []);
   const setSearch = useCallback((q: string) => setState(s => ({ ...s, searchQuery: q })), []);
+
+  const setMixSessionTrackCount = useCallback((count: number) => {
+    setState((s) => {
+      const clamped = Math.max(0, Math.min(24, Number.isFinite(count) ? Math.floor(count) : 0));
+      const mixPaths = Array.from({ length: clamped }, (_, index) => s.mixPaths[index] ?? buildMixPathModel(index + 1));
+
+      return {
+        ...s,
+        mixSessionTrackCount: clamped,
+        mixPaths,
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, s.parallelChain, s.analysis, s.routeValidation, s.mode, mixPaths),
+        perspectiveInsights: buildInsights(s.analysis, s.mode, mixPaths),
+      };
+    });
+  }, []);
+
+  const updateMixPathDestination = useCallback((pathId: string, destination: MixPathDestinationId) => {
+    setState((s) => {
+      const mixPaths = s.mixPaths.map((path) => path.id === pathId ? buildMixPathModel(path.trackNumber, destination) : path);
+
+      return {
+        ...s,
+        mixPaths,
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, s.parallelChain, s.analysis, s.routeValidation, s.mode, mixPaths),
+        perspectiveInsights: buildInsights(s.analysis, s.mode, mixPaths),
+      };
+    });
+  }, []);
 
   const selectMic = useCallback((mic: Microphone | null) => {
     setState(s => {
@@ -113,8 +224,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(mic, s.selectedPreamp, s.insertChain, s.parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(mic, s.selectedPreamp, s.insertChain, s.parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(mic, s.selectedPreamp, s.insertChain),
         inspectedId: mic?.id ?? null,
       };
@@ -132,8 +243,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, pre, s.insertChain, s.parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, pre, s.insertChain, s.parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, pre, s.insertChain),
         inspectedId: pre?.id ?? null,
       };
@@ -152,8 +263,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, insertChain),
         inspectedId: proc.item.id,
       };
@@ -177,8 +288,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, s.insertChain),
         inspectedId: parallelProc.item.id,
       };
@@ -197,8 +308,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, s.insertChain),
       };
     });
@@ -231,8 +342,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, s.insertChain),
       };
     });
@@ -250,8 +361,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, insertChain),
       };
     });
@@ -271,8 +382,8 @@ export function useStudio() {
         analysis,
         patchGraph,
         routeValidation,
-        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation),
-        perspectiveInsights: buildInsights(analysis),
+        routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, insertChain, s.parallelChain, analysis, routeValidation, s.mode, s.mixPaths),
+        perspectiveInsights: buildInsights(analysis, s.mode, s.mixPaths),
         sonicSignature: buildSonicSignature(s.selectedMic, s.selectedPreamp, insertChain),
       };
     });
@@ -291,8 +402,8 @@ export function useStudio() {
       analysis: null,
       patchGraph: initialPatchGraph,
       routeValidation: initialRouteValidation,
-      routeSummary: buildRouteSummary(null, null, [], [], null, initialRouteValidation),
-      perspectiveInsights: buildInsights(null),
+      routeSummary: buildRouteSummary(null, null, [], [], null, initialRouteValidation, s.mode, s.mixPaths),
+      perspectiveInsights: buildInsights(null, s.mode, s.mixPaths),
       sonicSignature: buildSonicSignature(null, null, []),
       chain: [],
       parallelChain: [],
@@ -304,6 +415,8 @@ export function useStudio() {
     setPerspective,
     setMode,
     setSearch,
+    setMixSessionTrackCount,
+    updateMixPathDestination,
     selectMic,
     selectPreamp,
     addInsert,

@@ -122,15 +122,15 @@ export const patchRows: PatchRow[] = [
   { id: 'row-aurora-da-otb', label: 'Aurora DA 17–24', order: 9, normalled_to: 'row-otb-in', category: 'signal-path', description: 'Aurora DA outputs 17–24. Full-normalled to Tonelux OTB channels 1–8.' },
   { id: 'row-otb-in', label: 'OTB Inputs 1–8', order: 10, category: 'signal-path', description: 'Tonelux OTB-16 channel inputs 1–8. Full-normalled from Aurora DA 17–24.' },
 
-  // ── BAY 5: API Channel Inserts (half normal pairs) ──
-  { id: 'row-insert-send', label: 'API Insert Sends', order: 11, half_normal: true, category: 'signal-path', description: 'Half-normalled insert send/return pairs on API ch 1–16 plus Mix A and Mix B bus inserts. Ch 1–16 sends are always live taps. Mix A insert return: D-Box+ sum L/R (full normal). Mix B insert return: OTB transformer L/R (full normal).' },
-  { id: 'row-insert-return', label: 'API Insert Returns', order: 12, category: 'signal-path', description: 'Insert returns for API ch 1–16 and bus inserts. Patch outboard between send and return. Mix A return normalled from D-Box+ sum, Mix B return normalled from OTB transformer out.' },
-
   // ── OUTBOARD POOL (choosable processors — no default normals) ──
-  { id: 'row-dynamics', label: 'Dynamics', order: 13, category: 'outboard-pool', description: 'All compressors, limiters, gates. Patch between insert sends and returns, or use for parallel processing.' },
-  { id: 'row-eq', label: 'Equalizers', order: 14, category: 'outboard-pool', description: 'All equalizers except Tilts. Langevin MMP, Retro 2A3, Iron Age V2, Chandler Tone Control ×2, Tonelux Equalux.' },
-  { id: 'row-spatial', label: 'Spatial / Harmonic', order: 15, category: 'outboard-pool', description: 'Stereo wideners and low-end harmonic enhancers. No static normal destination; patch where needed.' },
-  { id: 'row-fx', label: 'Time-Based FX', order: 16, category: 'outboard-pool', description: 'Reverbs and multi-FX. Generally run as parallel return processors, patched per session.' },
+  { id: 'row-dynamics', label: 'Dynamics', order: 11, category: 'outboard-pool', description: 'All compressors, limiters, gates. Patch between insert sends and returns, or use for parallel processing.' },
+  { id: 'row-eq', label: 'EQ / OUTBOARD', order: 12, category: 'outboard-pool', description: 'Equalizers, inline color boxes, and time or spatial outboard available from the same routing field.' },
+  { id: 'row-spatial', label: 'Spatial / Harmonic', order: 13, category: 'outboard-pool', description: 'Stereo wideners and low-end harmonic enhancers. No static normal destination; patch where needed.' },
+  { id: 'row-fx', label: 'Time-Based FX', order: 14, category: 'outboard-pool', description: 'Reverbs and multi-FX. Generally run as parallel return processors, patched per session.' },
+
+  // ── BAY 5: API Channel Inserts (half normal pairs) ──
+  { id: 'row-insert-send', label: 'API Insert Sends', order: 15, half_normal: true, category: 'signal-path', description: 'Half-normalled insert send/return pairs on API ch 1–16 plus Mix A and Mix B bus inserts. Ch 1–16 sends are always live taps. Mix A insert return: D-Box+ sum L/R (full normal). Mix B insert return: OTB transformer L/R (full normal).' },
+  { id: 'row-insert-return', label: 'API Insert Returns', order: 16, category: 'signal-path', description: 'Insert returns for API ch 1–16 and bus inserts. Patch outboard between send and return. Mix A return normalled from D-Box+ sum, Mix B return normalled from OTB transformer out.' },
 
   // ── BAY 6: Summing Sources → Pueblo ──
   { id: 'row-api-mix-out', label: 'API Mix Bus Outputs', order: 17, category: 'summing', description: 'API Mix A L/R and Mix B L/R bus outputs. Mix A full-normalled to Pueblo Bank C inputs 1–2. Mix B full-normalled to Pueblo Bank D inputs 1–2.' },

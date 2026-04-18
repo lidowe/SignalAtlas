@@ -61,9 +61,9 @@ function firstPoint(pts: PointRect[]): { x: number; y: number } | null {
 }
 
 // ── Default monitor path row order (always visible) ──
-const MONITOR_ROWS = ['row-api-mix', 'row-pueblo', 'row-ad-daw'];
+const MONITOR_ROWS = ['row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'];
 const TRACKING_ROWS = ['row-mic-ties', 'row-preamp-in', 'row-dynamics', 'row-eq', 'row-ad-daw'];
-const MIXING_ROWS = ['row-preamp-out', 'row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw'];
+const MIXING_ROWS = ['row-preamp-out', 'row-insert-send', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw'];
 
 // ── Segment: a path fragment with its own signal level + lane count ──
 interface PathSegment {
@@ -293,7 +293,7 @@ export default function SignalFlowOverlay({
   if (showReturnPaths) {
     const branchRow = hasOutboard ? rows.get('row-eq') : rows.get('row-preamp-in');
     const returnTargets = mode === 'mixing'
-      ? ['row-insert-send', 'row-api-mix', 'row-pueblo', 'row-ad-daw']
+      ? ['row-insert-send', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw']
       : ['row-dynamics', 'row-eq', 'row-ad-daw'];
 
     if (branchRow) {

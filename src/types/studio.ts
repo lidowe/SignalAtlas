@@ -404,6 +404,20 @@ export interface RouteSummaryModel {
   available_next_actions: string[];
 }
 
+export type MixPathDestinationId = 'api-mix-a' | 'api-mix-b' | 'otb' | 'pueblo-bank-a' | 'pueblo-bank-b';
+
+export interface MixPathModel {
+  id: string;
+  trackNumber: number;
+  sourceLabel: string;
+  routeLabel: string;
+  destination: MixPathDestinationId;
+  sonicIntent: string;
+  technicalNote: string;
+  printTarget: string;
+  monitorTarget: string;
+}
+
 export interface PerspectiveInsightModel {
   perspective: Perspective;
   summary: string;
