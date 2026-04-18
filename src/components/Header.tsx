@@ -107,7 +107,7 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
                     : 'border border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {p.key === 'engineer' ? 'Eng' : p.key === 'musician' ? 'Mus' : 'Tech'}
+                {p.label}
               </button>
             ))}
           </div>

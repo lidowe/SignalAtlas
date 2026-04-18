@@ -464,13 +464,15 @@ function StackedBayFace({
       <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
         {segments.map((segment) => {
           const content = segment.subLabels ? (
-            <div className={`rounded-[3px] border px-1 py-1 text-center shadow-sm ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
+            <div className={`rounded-[4px] border px-1 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
               <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+              <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
               <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
             </div>
           ) : (
-            <span className={`block truncate rounded-[3px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-sm ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
-              {segment.label}
+            <span className={`block truncate rounded-[4px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+              <span className="block">{segment.label}</span>
+              <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
             </span>
           );
 
