@@ -458,39 +458,32 @@ function StackedBayFace({
   };
 
   const renderStrip = (segments: PairedBaySegment[], activeSegmentId?: string | null, onClick?: (segmentId: string) => void) => {
-    const usedColumns = segments.reduce((sum, segment) => sum + segment.count, 0);
-
     return (
-      <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
+      <div className="flex flex-wrap gap-1">
         {segments.map((segment) => {
           const content = segment.subLabels ? (
-            <div className={`rounded-[4px] border px-1 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+            <div className={`min-w-[5.5rem] rounded-[4px] border px-1.5 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
               <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
               <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
-              <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+              <div className="mt-0.5 flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
             </div>
           ) : (
-            <span className={`block truncate rounded-[4px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+            <span className={`block min-w-[5.5rem] rounded-[4px] border px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
               <span className="block">{segment.label}</span>
               <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
             </span>
           );
 
           return onClick ? (
-            <button key={segment.id} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }} {...segmentButtonProps}>
+            <button key={segment.id} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onClick(segment.id)} {...segmentButtonProps}>
               {content}
             </button>
           ) : (
-            <div key={segment.id} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
+            <div key={segment.id}>
               {content}
             </div>
           );
         })}
-        {usedColumns < totalColumns && (
-          <div className="mat-recess rounded-[2px] border border-zinc-800/20 px-2 py-1 text-center text-silkscreen-faint text-[8px]" style={{ gridColumn: `span ${totalColumns - usedColumns} / span ${totalColumns - usedColumns}` }}>
-            open
-          </div>
-        )}
       </div>
     );
   };
@@ -540,15 +533,23 @@ function StackedBayFace({
       {layout === 'single-bottom' ? (
         <div className="space-y-1">
           {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
-          {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+          <div className="overflow-x-auto pb-0.5">
+            <div className="min-w-[42rem]">
+              {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+            </div>
+          </div>
           <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
         </div>
       ) : (
         <div className="space-y-1">
           {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
-          {renderSocketRow(topEntries, selectedTop, 'top')}
-          {renderBridgeRow()}
-          {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+          <div className="overflow-x-auto pb-0.5">
+            <div className="min-w-[42rem] space-y-1">
+              {renderSocketRow(topEntries, selectedTop, 'top')}
+              {renderBridgeRow()}
+              {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+            </div>
+          </div>
           {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
           <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
         </div>
@@ -582,39 +583,37 @@ function PhysicalPairedBay({
   return (
     <div className="mat-brushed-mid mat-recess rounded-[3px] px-2 py-1.5">
       <div className="space-y-1">
-        <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
+        <div className="flex flex-wrap gap-1">
           {topSegments.map((segment) => {
             const isOpen = openSegmentId === segment.id;
-              const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
-              const content = segment.subLabels ? (
-                <div className={`rounded-[3px] border px-1 py-1 text-center shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-                  <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
-                </div>
-              ) : (
-                <span className={`block truncate rounded-[3px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
-                  {segment.label}
-                </span>
-              );
-
-              return onSegmentClick ? (
-                <button key={`top-${segment.id}`} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onSegmentClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
-                  {content}
-                </button>
-              ) : (
-                <div key={`top-${segment.id}`} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
-                  {content}
-                </div>
-              );
-            })}
-            {topEntries.length < totalColumns && (
-              <div className="mat-recess rounded-[2px] border border-zinc-800/20 px-1 py-1 text-center text-silkscreen-faint text-[8px]" style={{ gridColumn: `span ${totalColumns - topEntries.length} / span ${totalColumns - topEntries.length}` }}>
-                open
+            const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
+            const content = segment.subLabels ? (
+              <div className={`min-w-[5.5rem] rounded-[4px] border px-1.5 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+                <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+                <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
+                <div className="mt-0.5 flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
               </div>
-            )}
-          </div>
+            ) : (
+              <span className={`block min-w-[5.5rem] rounded-[4px] border px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+                <span className="block">{segment.label}</span>
+                <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
+              </span>
+            );
 
-          <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
+            return onSegmentClick ? (
+              <button key={`top-${segment.id}`} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onSegmentClick(segment.id)}>
+                {content}
+              </button>
+            ) : (
+              <div key={`top-${segment.id}`}>
+                {content}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="overflow-x-auto pb-0.5">
+          <div className="min-w-[42rem] grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
             {Array.from({ length: totalColumns }, (_, index) => {
               const top = topEntries[index] ?? null;
               const bottom = bottomEntries[index] ?? null;
@@ -639,37 +638,36 @@ function PhysicalPairedBay({
             })}
           </div>
 
-          <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
-            {bottomSegments.map((segment) => {
-              const isOpen = openSegmentId === segment.id;
-              const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
-              const content = segment.subLabels ? (
-                <div className={`rounded-[3px] border px-1 py-1 text-center shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-                  <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
-                </div>
-              ) : (
-                <span className={`block truncate rounded-[3px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
-                  {segment.label}
-                </span>
-              );
-
-              return onSegmentClick ? (
-                <button key={`bottom-${segment.id}`} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onSegmentClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
-                  {content}
-                </button>
-              ) : (
-                <div key={`bottom-${segment.id}`} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
-                  {content}
-                </div>
-              );
-            })}
-            {bottomEntries.length < totalColumns && (
-              <div className="mat-recess rounded-[2px] border border-zinc-800/20 px-1 py-1 text-center text-silkscreen-faint text-[8px]" style={{ gridColumn: `span ${totalColumns - bottomEntries.length} / span ${totalColumns - bottomEntries.length}` }}>
-                open
-              </div>
-            )}
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1">
+          {bottomSegments.map((segment) => {
+            const isOpen = openSegmentId === segment.id;
+            const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
+            const content = segment.subLabels ? (
+              <div className={`min-w-[5.5rem] rounded-[4px] border px-1.5 py-1 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+                <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+                <div className="mt-0.5 flex items-center justify-center gap-1 text-[6px] uppercase tracking-[0.08em] text-zinc-300/75"><span>tap</span><span>▾</span></div>
+                <div className="mt-0.5 flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+              </div>
+            ) : (
+              <span className={`block min-w-[5.5rem] rounded-[4px] border px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_3px_rgba(0,0,0,0.28)] ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-500/45'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.08)' : 'rgba(70,70,70,0.22)' }}>
+                <span className="block">{segment.label}</span>
+                <span className="mt-0.5 block text-[6px] uppercase tracking-[0.08em] text-zinc-300/75">tap ▾</span>
+              </span>
+            );
+
+            return onSegmentClick ? (
+              <button key={`bottom-${segment.id}`} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onSegmentClick(segment.id)}>
+                {content}
+              </button>
+            ) : (
+              <div key={`bottom-${segment.id}`}>
+                {content}
+              </div>
+            );
+          })}
         </div>
         <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
     </div>
@@ -706,7 +704,7 @@ function ActionButton({ children, active = false, tone = 'zinc', className = '',
   return (
     <button
       {...props}
-      className={`rounded-[2px] border px-3 py-1.5 text-silkscreen text-[9px] transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:-translate-y-[0.5px] ${tones[tone]} ${className}`.trim()}
+      className={`rounded-[2px] border px-2 py-1 text-silkscreen text-[8px] transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] hover:-translate-y-[0.5px] ${tones[tone]} ${className}`.trim()}
       style={isLens ? { borderColor: 'var(--sa-lens-border)', backgroundColor: 'var(--sa-lens-wash)', color: 'var(--sa-lens-text)' } : undefined}
     >
       {children}
@@ -714,23 +712,23 @@ function ActionButton({ children, active = false, tone = 'zinc', className = '',
   );
 }
 
-function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Unit details', selected, primaryLabel, primaryActive = selected, onPrimary, onInspect, extraAction }: { pointNumber: number; tone: BayTone; title: string; meta: string; body?: string; detailLabel?: string; selected: boolean; primaryLabel: string; primaryActive?: boolean; onPrimary: () => void; onInspect: () => void; extraAction?: ReactNode }) {
+function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Details', selected, primaryLabel, primaryActive = selected, onPrimary, onInspect, extraAction }: { pointNumber: number; tone: BayTone; title: string; meta: string; body?: string; detailLabel?: string; selected: boolean; primaryLabel: string; primaryActive?: boolean; onPrimary: () => void; onInspect: () => void; extraAction?: ReactNode }) {
   return (
-    <div className={`mat-brushed-dark rounded-[3px] border px-3 py-2 transition-all duration-300 ${selected ? 'border-zinc-600/40 mat-raised' : 'border-zinc-800/30'}`}>
-      <div className="flex items-start gap-3">
+    <div className={`mat-brushed-dark rounded-[3px] border px-2 py-1.5 transition-all duration-300 ${selected ? 'border-zinc-600/40 mat-raised' : 'border-zinc-800/30'}`}>
+      <div className="flex items-start gap-2">
         <span className={`mt-0.5 tt-jack flex items-center justify-center ${selected ? 'tt-jack-selected' : ''}`} style={selected ? { color: bayToneClasses[tone].accent } : undefined}>
           {pointNumber}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{title}</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[12px] font-medium leading-tight" style={{ color: 'var(--sa-cream)' }}>{title}</span>
             {selected && <span className="led led-green" />}
           </div>
-          <div className="mt-0.5 text-silkscreen-faint text-[8px]">{meta}</div>
-          {body && <p className="mt-1 text-xs leading-relaxed text-zinc-500">{body}</p>}
-          <div className="mt-1.5 flex flex-wrap gap-2">
-            <ActionButton type="button" onClick={onInspect}>{detailLabel}</ActionButton>
-            <ActionButton type="button" onClick={onPrimary} tone="amber" active={primaryActive}>{primaryLabel}</ActionButton>
+          <div className="mt-0.5 text-silkscreen-faint text-[7px]">{meta}</div>
+          {body && <p className="mt-0.5 text-[10px] leading-snug text-zinc-500">{body}</p>}
+          <div className="mt-1 flex flex-wrap gap-1">
+            <ActionButton type="button" className="min-w-[4.4rem]" onClick={onInspect}>{detailLabel}</ActionButton>
+            <ActionButton type="button" className="min-w-[4.8rem]" onClick={onPrimary} tone="amber" active={primaryActive}>{primaryLabel}</ActionButton>
             {extraAction}
           </div>
         </div>
@@ -888,7 +886,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
         ...preamps.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: hasStandaloneEqSection(item) ? 'cyan' as BayTone : 'blue' as BayTone, onUse: () => onSelectPreamp(item), onInspect: () => onInspect(item.id), actionLabel: 'Use preamp' })),
         ...compressors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: 'purple' as BayTone, onUse: () => toggleInsert({ type: 'compressor', item }), onInspect: () => onInspect(item.id), actionLabel: 'Insert' })),
         ...equalizers.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.topology}`, tone: 'teal' as BayTone, onUse: () => toggleInsert({ type: 'equalizer', item }), onInspect: () => onInspect(item.id), actionLabel: 'Insert EQ' })),
-        ...outboardProcessors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: item.routing_mode === 'parallel-send-return' ? 'sky' as BayTone : 'cyan' as BayTone, onUse: () => item.routing_mode === 'parallel-send-return' ? toggleParallel({ type: 'outboard', item }) : toggleInsert({ type: 'outboard', item }), onInspect: () => onInspect(item.id), actionLabel: item.routing_mode === 'parallel-send-return' ? 'Blend return' : 'Insert' })),
+        ...outboardProcessors.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.vendor} · ${item.type}`, tone: item.routing_mode === 'parallel-send-return' ? 'sky' as BayTone : 'cyan' as BayTone, onUse: () => item.routing_mode === 'parallel-send-return' ? toggleParallel({ type: 'outboard', item }) : toggleInsert({ type: 'outboard', item }), onInspect: () => onInspect(item.id), actionLabel: item.routing_mode === 'parallel-send-return' ? 'Blend' : 'Insert' })),
       ].filter((entry) => `${entry.title} ${entry.subtitle}`.toLowerCase().includes(normalizedQuery)).slice(0, 8)
     : [];
   // Tie line segments — simple 1–48 numbered tie lines for Bay 0
@@ -1352,7 +1350,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
 
                   {preampInputSectionPreamps && preampInputSectionPreamps.length > 0 && (
                     <DetailTray title={openSection === 'preamp-eq-inputs' ? 'Preamp / EQ inputs' : 'Preamp inputs'} caption={openSection === 'preamp-eq-inputs' ? 'These channels anchor the first gain stage and later contribute another shaped analog pass.' : 'The first gain stage shapes how the source arrives at the recorder.'} toneClass="border-blue-900/20 bg-blue-950/8" onClose={() => clearOpenSection(row.id)}>
-                      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                      <div className="grid grid-cols-2 gap-1.5">
                         {preampInputSectionPreamps.map((preamp) => (
                           <CompactChoice
                             key={preamp.id}
@@ -1361,13 +1359,13 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                             title={preamp.name}
                             meta={compactMeta([preamp.topology, `${preamp.channels}ch`, preamp.eq_features ?? null, preamp.input_z_hi ? 'Hi-Z' : null])}
                             selected={selectedPreamp?.id === preamp.id}
-                            primaryLabel="Patch into chain"
+                            primaryLabel="Add patch"
                             onPrimary={() => { onSelectPreamp(preamp); clearOpenSection(row.id); }}
-                            detailLabel="Preamp details"
+                            detailLabel="Details"
                             onInspect={() => onInspect(preamp.id)}
                             extraAction={hasStandaloneEqSection(preamp) ? (
                               <ActionButton type="button" tone="cyan" active={insertPreampEqIds.has(preamp.id)} onClick={() => toggleInsert({ type: 'preamp-eq', item: preamp })}>
-                                {insertPreampEqIds.has(preamp.id) ? 'Remove EQ stage' : 'Add EQ stage'}
+                                {insertPreampEqIds.has(preamp.id) ? 'Remove EQ' : 'Add EQ'}
                               </ActionButton>
                             ) : undefined}
                           />
@@ -1389,7 +1387,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
               <RowShell key={row.id} rowId={row.id} order="1" label="PREAMP OUTPUTS / DAW INPUTS" active={active} isNext={isNext} mode={mode}>
                 {openSection && preampsInSection.length > 0 && (
                   <DetailTray title={normalizedSection === 'preamp-eq' ? 'Preamp / EQ units' : 'Standalone preamps'} caption={normalizedSection === 'preamp-eq' ? 'These channels can anchor the first gain stage and later contribute another shaped analog pass.' : 'These are the core front-end choices that define how the source arrives at the recorder.'} toneClass="border-blue-900/20 bg-blue-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {preampsInSection.map((preamp) => (
                         <CompactChoice
                           key={preamp.id}
@@ -1398,13 +1396,13 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                           title={preamp.name}
                           meta={compactMeta([preamp.topology, `${preamp.channels}ch`, preamp.eq_features ?? null, preamp.input_z_hi ? 'Hi-Z' : null])}
                           selected={selectedPreamp?.id === preamp.id}
-                          primaryLabel="Patch into chain"
+                          primaryLabel="Add patch"
                           onPrimary={() => { onSelectPreamp(preamp); clearOpenSection(row.id); }}
-                          detailLabel="Preamp details"
+                          detailLabel="Details"
                           onInspect={() => onInspect(preamp.id)}
                           extraAction={hasStandaloneEqSection(preamp) ? (
                             <ActionButton type="button" tone="cyan" active={insertPreampEqIds.has(preamp.id)} onClick={() => toggleInsert({ type: 'preamp-eq', item: preamp })}>
-                              {insertPreampEqIds.has(preamp.id) ? 'Remove EQ stage' : 'Add EQ stage'}
+                              {insertPreampEqIds.has(preamp.id) ? 'Remove EQ' : 'Add EQ'}
                             </ActionButton>
                           ) : undefined}
                         />
@@ -1478,8 +1476,8 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                 <SectionMarker title="Outboard field" subtitle="Dynamics, equalizers, and returns live here. Nothing needs to be patched unless the sound genuinely benefits from it." />
                 <RowShell rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
                   {activeGroup && (
-                    <DetailTray title={`${activeGroup.label} compressors`} caption="Patch into chain inserts the unit into the direct path. Blend return keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/20 bg-purple-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <DetailTray title={`${activeGroup.label} compressors`} caption="Add patch inserts the unit into the direct path. Blend keeps the dry route intact and adds a parallel branch." toneClass="border-purple-900/20 bg-purple-950/8" position="above" onClose={() => clearOpenSection(row.id)}>
+                      <div className="grid grid-cols-2 gap-1.5">
                         {activeGroup.items.map((compressor) => {
                           const insertSelected = insertChain.some((processor) => processor.type === 'compressor' && processor.item.id === compressor.id);
                           const parallelSelected = parallelChain.some((processor) => processor.type === 'compressor' && processor.item.id === compressor.id);
@@ -1492,12 +1490,12 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                               title={compressor.name}
                               meta={compactMeta([compressor.topology, compressor.ratios, compressor.detection])}
                               selected={insertSelected || parallelSelected}
-                              primaryLabel={insertSelected ? 'Remove from chain' : 'Patch into chain'}
+                              primaryLabel={insertSelected ? 'Remove patch' : 'Add patch'}
                               primaryActive={insertSelected}
                               onPrimary={() => { toggleInsert({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}
-                              detailLabel="Compressor details"
+                              detailLabel="Details"
                               onInspect={() => onInspect(compressor.id)}
-                              extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => { toggleParallel({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}>{parallelSelected ? 'Remove branch' : 'Blend return'}</ActionButton>}
+                              extraAction={<ActionButton type="button" tone="cyan" active={parallelSelected} onClick={() => { toggleParallel({ type: 'compressor', item: compressor }); clearOpenSection(row.id); }}>{parallelSelected ? 'Remove' : 'Blend'}</ActionButton>}
                             />
                           );
                         })}
@@ -1536,14 +1534,14 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
               : activeEntry?.category === 'inline'
                 ? { title: `${activeEntry.label} inline processors`, caption: 'These units patch straight into the main route when the chain needs more deliberate color or spatial shaping.', toneClass: 'border-cyan-900/60 bg-cyan-950/18' }
                 : activeEntry?.category === 'fx'
-                  ? { title: `${activeEntry.label} returns`, caption: 'Blend return is the primary action here because these processors are meant to supplement the direct chain rather than replace it.', toneClass: 'border-sky-900/60 bg-sky-950/18' }
+                  ? { title: `${activeEntry.label} returns`, caption: 'Blend is the primary action here because these processors are meant to supplement the direct chain rather than replace it.', toneClass: 'border-sky-900/60 bg-sky-950/18' }
                   : null;
 
             return (
               <RowShell key={row.id} rowId={row.id} order={row.order} label={routeRowLabel(row.id)} active={active} isNext={isNext} mode={mode}>
                 {activeEntry && trayConfig && (
                   <DetailTray title={trayConfig.title} caption={trayConfig.caption} toneClass={trayConfig.toneClass} position="above" onClose={() => clearOpenSection(row.id)}>
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {activeEntry.category === 'eq' && activeEntry.items.map((equalizer) => (
                         <CompactChoice
                           key={equalizer.id}
@@ -1552,9 +1550,9 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                           title={equalizer.name}
                           meta={compactMeta([(equalizer as any).topology, `${equalizer.channels}ch`, (equalizer as any).bands])}
                           selected={insertIds.has(equalizer.id)}
-                          primaryLabel={insertIds.has(equalizer.id) ? 'Remove from chain' : 'Patch into chain'}
+                          primaryLabel={insertIds.has(equalizer.id) ? 'Remove patch' : 'Add patch'}
                           onPrimary={() => { toggleInsert({ type: 'equalizer', item: equalizer as any }); clearOpenSection(row.id); }}
-                          detailLabel="EQ details"
+                          detailLabel="Details"
                           onInspect={() => onInspect(equalizer.id)}
                         />
                       ))}
@@ -1566,9 +1564,9 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                           title={processor.name}
                           meta={compactMeta([(processor as any).type, (processor as any).format, `${processor.channels}ch`])}
                           selected={insertIds.has(processor.id)}
-                          primaryLabel={insertIds.has(processor.id) ? 'Remove from chain' : 'Patch into chain'}
+                          primaryLabel={insertIds.has(processor.id) ? 'Remove patch' : 'Add patch'}
                           onPrimary={() => { toggleInsert({ type: 'outboard', item: processor as any }); clearOpenSection(row.id); }}
-                          detailLabel="Processor details"
+                          detailLabel="Details"
                           onInspect={() => onInspect(processor.id)}
                         />
                       ))}
@@ -1580,9 +1578,9 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
                           title={processor.name}
                           meta={compactMeta([(processor as any).type, (processor as any).format, `${processor.channels}ch`])}
                           selected={parallelIds.has(processor.id)}
-                          primaryLabel={parallelIds.has(processor.id) ? 'Remove branch' : 'Blend return'}
+                          primaryLabel={parallelIds.has(processor.id) ? 'Remove' : 'Blend'}
                           onPrimary={() => { toggleParallel({ type: 'outboard', item: processor as any }); clearOpenSection(row.id); }}
-                          detailLabel="Processor details"
+                          detailLabel="Details"
                           onInspect={() => onInspect(processor.id)}
                         />
                       ))}
