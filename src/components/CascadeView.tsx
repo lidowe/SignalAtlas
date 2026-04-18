@@ -395,25 +395,28 @@ function MixingSource({ perspective, selectedNode, onSelectNode, onInspect }: { 
         </div>
       </div>
 
-      {/* Print path */}
+      {/* Print path — correct topology: Mix A → Pueblo C, Mix B → Pueblo D → mastering → AD+ */}
       <div>
         <div className="flex items-center gap-1.5 text-[9px] mb-1" style={{ color: 'var(--sa-cream-dim)' }}>
           <span className="inline-block w-3 h-0.5 bg-fuchsia-500/60 rounded" />
-          Print path — the mix reaches AD+ for final capture back to the DAW
+          Console buses → Pueblo cascade → mastering chain → AD+ for final capture
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <StageBox label="API Mix A" sublabel="Primary bus" accent="#ef4444" />
-          <Arrow label="Mix A" color="text-fuchsia-700" />
+          <Arrow label="→ Pueblo C" color="text-green-700" />
+          <CascadeNode node={pueblo} selected={selectedNode?.id === pueblo.id} onSelect={onSelectNode} onInspect={onInspect} />
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto mt-1.5 pb-1 ml-4">
+          <StageBox label="API Mix B" sublabel="OTB tributary" accent="#ef4444" />
+          <Arrow label="→ Pueblo D" color="text-green-700" />
+          <StageBox label="Pueblo Bank D" sublabel="Optional xfmr" accent="#22c55e" />
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto mt-1.5 pb-1 ml-8">
+          <StageBox label="Pueblo D out" sublabel="Print source" accent="#22c55e" />
+          <Arrow label="mastering chain" dashed color="text-fuchsia-700" />
           <CascadeNode node={adplus} selected={selectedNode?.id === adplus.id} onSelect={onSelectNode} onInspect={onInspect} />
           <DomainGate label="▸ digital" />
           <StageBox label="DAW" sublabel="Print track" accent="#a1a1aa" />
-        </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto mt-1.5 pb-1 ml-4">
-          <StageBox label="API Mix B" sublabel="Alternate bus" accent="#ef4444" />
-          <Arrow label="Mix B" color="text-green-700" />
-          <CascadeNode node={pueblo} selected={selectedNode?.id === pueblo.id} onSelect={onSelectNode} onInspect={onInspect} />
-          <Arrow label="Bank D hardwired" dashed color="text-green-700" />
-          <StageBox label="AD+ input B" sublabel="Bypasses API iron" accent="#e879f9" />
         </div>
       </div>
 

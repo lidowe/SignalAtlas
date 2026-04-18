@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature, MixPathModel, MixPathDestinationId } from '../types/studio';
+import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature, MixPathModel, MixPathDestinationId, MixChannelInsert, MixAnalysis } from '../types/studio';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
@@ -11,7 +11,7 @@ import { buildSonicSignature } from '../engine/sonicSignature';
 import { buildPatchGraph } from '../engine/patchRouting';
 import { validatePatchGraph } from '../engine/routeValidation';
 import { buildDefaultParallelRouting, normalizeParallelRouting, parallelReturnDestinationOptions, parallelSendSourceOptions } from '../engine/routingTopology';
-import { buildPerspectiveInsights, buildRouteSummary } from '../engine/studioViewModel';
+import { buildPerspectiveInsights, buildRouteSummary, buildMixAnalysis } from '../engine/studioViewModel';
 import type { PerspectiveInsightModel, RouteSummaryModel } from '../types/studio';
 
 /** Extract { has_transformer, noise_floor_db } from any insert processor for signal chain analysis */
@@ -133,6 +133,8 @@ export interface StudioState {
   perspectiveInsights: Record<Perspective, PerspectiveInsightModel>;
   mixSessionTrackCount: number;
   mixPaths: MixPathModel[];
+  mixChannelInserts: MixChannelInsert[];
+  mixAnalysis: MixAnalysis;
 
   sonicSignature: SonicSignature;
   inspectedId: string | null;
@@ -166,6 +168,8 @@ export function useStudio() {
     perspectiveInsights: buildInsights(null, 'tracking', []),
     mixSessionTrackCount: 0,
     mixPaths: [],
+    mixChannelInserts: [],
+    mixAnalysis: buildMixAnalysis([], []),
     sonicSignature: buildSonicSignature(null, null, []),
     inspectedId: null,
     searchQuery: '',
@@ -184,11 +188,15 @@ export function useStudio() {
     setState((s) => {
       const clamped = Math.max(0, Math.min(24, Number.isFinite(count) ? Math.floor(count) : 0));
       const mixPaths = Array.from({ length: clamped }, (_, index) => s.mixPaths[index] ?? buildMixPathModel(index + 1));
+      const mixChannelInserts = s.mixChannelInserts.filter(i => i.channelNumber <= clamped);
+      const mixAnalysis = buildMixAnalysis(mixPaths, mixChannelInserts);
 
       return {
         ...s,
         mixSessionTrackCount: clamped,
         mixPaths,
+        mixChannelInserts,
+        mixAnalysis,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, s.parallelChain, s.analysis, s.routeValidation, s.mode, mixPaths),
         perspectiveInsights: buildInsights(s.analysis, s.mode, mixPaths),
       };
@@ -198,13 +206,38 @@ export function useStudio() {
   const updateMixPathDestination = useCallback((pathId: string, destination: MixPathDestinationId) => {
     setState((s) => {
       const mixPaths = s.mixPaths.map((path) => path.id === pathId ? buildMixPathModel(path.trackNumber, destination) : path);
+      const mixAnalysis = buildMixAnalysis(mixPaths, s.mixChannelInserts);
 
       return {
         ...s,
         mixPaths,
+        mixAnalysis,
         routeSummary: buildRouteSummary(s.selectedMic, s.selectedPreamp, s.insertChain, s.parallelChain, s.analysis, s.routeValidation, s.mode, mixPaths),
         perspectiveInsights: buildInsights(s.analysis, s.mode, mixPaths),
       };
+    });
+  }, []);
+
+  const addMixChannelInsert = useCallback((channelNumber: number, processor: InsertProcessor) => {
+    setState((s) => {
+      if (channelNumber < 1 || channelNumber > s.mixSessionTrackCount) return s;
+      // Replace existing insert on same channel, or add new
+      const exists = s.mixChannelInserts.some(i => i.channelNumber === channelNumber);
+      const mixChannelInserts = exists
+        ? s.mixChannelInserts.map(i => i.channelNumber === channelNumber ? { channelNumber, processor } : i)
+        : [...s.mixChannelInserts, { channelNumber, processor }];
+      const mixAnalysis = buildMixAnalysis(s.mixPaths, mixChannelInserts);
+
+      return { ...s, mixChannelInserts, mixAnalysis, inspectedId: processor.item.id };
+    });
+  }, []);
+
+  const removeMixChannelInsert = useCallback((channelNumber: number) => {
+    setState((s) => {
+      const mixChannelInserts = s.mixChannelInserts.filter(i => i.channelNumber !== channelNumber);
+      const mixAnalysis = buildMixAnalysis(s.mixPaths, mixChannelInserts);
+
+      return { ...s, mixChannelInserts, mixAnalysis };
     });
   }, []);
 
@@ -412,6 +445,8 @@ export function useStudio() {
     setSearch,
     setMixSessionTrackCount,
     updateMixPathDestination,
+    addMixChannelInsert,
+    removeMixChannelInsert,
     selectMic,
     selectPreamp,
     addInsert,

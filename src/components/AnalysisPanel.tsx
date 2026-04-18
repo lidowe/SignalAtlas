@@ -3,6 +3,7 @@ import type {
   ChainAnalysis,
   InsertProcessor,
   Microphone,
+  MixAnalysis,
   ParallelProcessor,
   Perspective,
   PerspectiveInsightModel,
@@ -24,6 +25,7 @@ interface Props {
   parallelChain: ParallelProcessor[];
   mixSessionTrackCount: number;
   mixPaths: MixPathModel[];
+  mixAnalysis: MixAnalysis;
   onClearChain: () => void;
 }
 
@@ -232,7 +234,7 @@ function directionalOverview(
 }
 
 export default function AnalysisPanel({
-  perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, mixSessionTrackCount, mixPaths, onClearChain,
+  perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, mixSessionTrackCount: _mixSessionTrackCount, mixPaths, mixAnalysis, onClearChain,
 }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -246,6 +248,10 @@ export default function AnalysisPanel({
   const hasMixSession = mode === 'mixing' && mixPaths.length > 0;
 
   if ((!analysis || !selectedMic || !selectedPreamp) && hasMixSession) {
+    const mixNarrative = perspective === 'musician' ? mixAnalysis.musicianSummary
+      : perspective === 'engineer' ? mixAnalysis.engineerSummary
+      : mixAnalysis.technicalSummary;
+
     return (
       <div className="mat-brushed-dark rounded-[3px] border border-zinc-800/20">
         <button
@@ -258,9 +264,27 @@ export default function AnalysisPanel({
         </button>
         {expanded && (
           <div className="border-t border-zinc-800/20 px-3 py-2 space-y-2">
-            <p className="text-[11px] leading-relaxed text-zinc-300">{perspectiveInsight.summary}</p>
-            <div className="text-[11px] text-zinc-500">{routeSummary.viability_flag.reason}</div>
-            <div className="text-[10px] text-zinc-500">{mixSessionTrackCount} active analog route{mixSessionTrackCount === 1 ? '' : 's'} instantiated from the DAW.</div>
+            <p className="text-[11px] leading-relaxed text-zinc-300">{mixNarrative}</p>
+            {mixAnalysis.harmonicDensity !== 'minimal' && (
+              <div className="flex flex-wrap gap-1.5">
+                <span className={`rounded-[2px] border px-1.5 py-0.5 text-[9px] ${
+                  mixAnalysis.harmonicDensity === 'saturated' ? 'border-red-800/30 text-red-300/80' :
+                  mixAnalysis.harmonicDensity === 'dense' ? 'border-amber-800/30 text-amber-300/80' :
+                  'border-yellow-800/30 text-yellow-300/80'
+                }`}>{mixAnalysis.harmonicDensity} density</span>
+                <span className="rounded-[2px] border border-zinc-700/30 px-1.5 py-0.5 text-[9px] text-zinc-400">{mixAnalysis.transformerStages} iron</span>
+                {mixAnalysis.tubeStages > 0 && (
+                  <span className="rounded-[2px] border border-orange-800/30 px-1.5 py-0.5 text-[9px] text-orange-300/80">{mixAnalysis.tubeStages} tube</span>
+                )}
+              </div>
+            )}
+            <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.headroomNote}</p>
+            {perspective !== 'musician' && (
+              <>
+                <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.transientCharacter}</p>
+                <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.noiseTrend}</p>
+              </>
+            )}
             {routeSummary.active_path.length > 0 && (
               <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
                 {routeSummary.active_path.map((stage, index) => (
@@ -275,13 +299,6 @@ export default function AnalysisPanel({
               <div className="space-y-1">
                 {routeSummary.deviations.map((deviation) => (
                   <p key={deviation} className="text-[11px] text-zinc-500">{deviation}</p>
-                ))}
-              </div>
-            )}
-            {routeSummary.available_next_actions.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {routeSummary.available_next_actions.slice(0, 3).map((action) => (
-                  <span key={action} className="text-[9px] px-1.5 py-0.5 rounded-[2px] border border-zinc-800/20 mat-recess text-zinc-400">{action}</span>
                 ))}
               </div>
             )}

@@ -4,6 +4,8 @@ import type {
   Equalizer,
   InsertProcessor,
   Microphone,
+  MixAnalysis,
+  MixChannelInsert,
   OutboardProcessor,
   ParallelProcessor,
   Perspective,
@@ -386,5 +388,138 @@ export function buildPerspectiveInsights(
       : `Primary concern: bridging ${analysis.bridging_ratio.toFixed(2)}:1 with ${analysis.effective_bw_khz.toFixed(1)}kHz effective bandwidth.`,
     warnings: analysis.warnings,
     notes: analysis.notes,
+  };
+}
+
+// ── Cumulative Mix Analysis ──
+
+const emptyMixAnalysis: MixAnalysis = {
+  totalChannels: 0,
+  apiChannels: 0,
+  otbChannels: 0,
+  channelInserts: [],
+  tubeStages: 0,
+  transformerStages: 0,
+  backboneTransformers: 0,
+  harmonicDensity: 'minimal',
+  headroomNote: 'No active channels.',
+  noiseTrend: 'Silent.',
+  transientCharacter: 'No signal path active.',
+  stereoImplication: 'No channels allocated.',
+  musicianSummary: 'No mix session active.',
+  engineerSummary: 'No mix session active.',
+  technicalSummary: 'No mix session active.',
+};
+
+export function buildMixAnalysis(
+  mixPaths: MixPathModel[],
+  channelInserts: MixChannelInsert[],
+): MixAnalysis {
+  if (mixPaths.length === 0) return emptyMixAnalysis;
+
+  const apiACount = mixPaths.filter(p => p.destination === 'api-mix-a').length;
+  const apiBCount = mixPaths.filter(p => p.destination === 'api-mix-b').length;
+  const apiChannels = apiACount + apiBCount;
+  const otbChannels = mixPaths.filter(p => p.destination === 'otb').length;
+
+  // ── Backbone transformer count ──
+  // Always: AD+ input transformer (1) + AD+ AES output transformer (1) = 2
+  // API output transformer: 1 per bus used
+  // OTB TX-100: 1 if OTB path is active
+  let backboneTransformers = 2; // AD+
+  if (apiACount > 0) backboneTransformers += 1; // Mix A bus output iron
+  if (apiBCount > 0) backboneTransformers += 1; // Mix B bus output iron
+  if (otbChannels > 0) backboneTransformers += 1; // OTB TX-100
+
+  // ── Per-channel insert analysis ──
+  let insertTubeStages = 0;
+  let insertTransformers = 0;
+  for (const insert of channelInserts) {
+    const proc = insert.processor;
+    switch (proc.type) {
+      case 'equalizer':
+        if (proc.item.has_transformer) insertTransformers++;
+        if (proc.item.topology === 'tube-reactive') insertTubeStages++;
+        break;
+      case 'outboard':
+        if (proc.item.has_transformer) insertTransformers++;
+        break;
+      case 'preamp-eq':
+        if (proc.item.has_transformer) insertTransformers++;
+        if (proc.item.topology === 'all-valve' || proc.item.topology === 'hybrid-tube') insertTubeStages++;
+        break;
+      case 'compressor':
+        insertTransformers++; // conservative assumption
+        if (proc.item.topology === 'variable-mu' || proc.item.topology === 'fet-tube') insertTubeStages++;
+        break;
+    }
+  }
+
+  const tubeStages = insertTubeStages;
+  const transformerStages = backboneTransformers + insertTransformers;
+
+  // ── Harmonic density rating ──
+  let harmonicDensity: MixAnalysis['harmonicDensity'] = 'minimal';
+  if (insertTransformers >= 8 || tubeStages >= 4) harmonicDensity = 'saturated';
+  else if (insertTransformers >= 4 || tubeStages >= 2) harmonicDensity = 'dense';
+  else if (insertTransformers >= 1 || tubeStages >= 1 || backboneTransformers >= 4) harmonicDensity = 'moderate';
+
+  // ── Headroom note ──
+  const headroomNote = apiChannels > 12
+    ? 'High channel count through API bus. The 4 dB gap between API max output (+28 dBu) and AD+ clip point (+24 dBu) demands careful bus level management.'
+    : otbChannels > 0
+      ? 'OTB tributary adds a second summing stage before the API bus. Watch cumulative level: OTB → API → AD+ has more gain structure to manage.'
+      : 'Standard backbone headroom. The AD+ clips at +24 dBu while the API can push +28 dBu — maintain 4 dB margin at the bus output.';
+
+  // ── Noise trend ──
+  const noiseTrend = tubeStages > 2
+    ? `${tubeStages} tube stages across channels — cumulative tube noise raises the mix floor. The AD+ endpoint (−108 dBu) is well below, so tube inserts dominate the noise picture.`
+    : channelInserts.length > 4
+      ? `${channelInserts.length} analog insert stages across channels. Each adds its noise contribution, though the AD+ endpoint (−108 dBu) keeps the capture floor low.`
+      : 'Backbone noise dominated by the AD+ endpoint (−108 dBu). Minimal per-channel processing keeps the cumulative floor low.';
+
+  // ── Transient character ──
+  const transientCharacter = tubeStages >= 3
+    ? 'Noticeably rounded. Multiple tube stages soften attack edges cumulatively — transients arrive shaped rather than sharp.'
+    : transformerStages >= 5
+      ? 'Iron-mediated. The transformer count means transient peaks get gently compressed by magnetic saturation across multiple stages.'
+      : otbChannels > 0
+        ? 'Mixed. API channels retain fast transients through the 2520 path, while OTB channels arrive with TX-100 transformer rounding.'
+        : 'Fast and direct. The API 2520 path preserves transient speed; backbone transformers add minimal rounding at normal levels.';
+
+  // ── Stereo implication ──
+  const stereoImplication = otbChannels > 0 && apiChannels > 0
+    ? 'Split topology creates two stereo characters: API channels carry the denser, mid-forward image, while OTB channels arrive with transformer-widened depth. The merge at the API bus insert blends these two spatial profiles.'
+    : 'API-dominant routing gives a cohesive, center-weighted stereo image with iron-mediated width.';
+
+  // ── Perspective summaries ──
+  const musicianSummary = tubeStages >= 2
+    ? `${mixPaths.length} channels through the analog console with ${tubeStages} tube stages adding warmth. The feel is getting thicker and more saturated — expect glue and body, but watch for transient mushiness on percussive material.`
+    : channelInserts.length > 0
+      ? `${mixPaths.length} channels through the analog backbone with ${channelInserts.length} outboard insert${channelInserts.length === 1 ? '' : 's'} adding character. The mix is building density and cohesion from the iron in the signal path.`
+      : `${mixPaths.length} channels through the studio's fixed analog path. The console iron and converter transformers give the mix its baseline punch and midrange authority.`;
+
+  const engineerSummary = channelInserts.length > 0
+    ? `${mixPaths.length} DA outputs: ${apiChannels} API${otbChannels > 0 ? `, ${otbChannels} OTB` : ''}. ${channelInserts.length} per-channel insert${channelInserts.length === 1 ? '' : 's'}. ${transformerStages} transformer stages (${backboneTransformers} backbone + ${insertTransformers} inserts). Harmonic density: ${harmonicDensity}.`
+    : `${mixPaths.length} DA outputs: ${apiChannels} API${otbChannels > 0 ? `, ${otbChannels} OTB` : ''}. Normalled backbone only. ${backboneTransformers} backbone transformers.`;
+
+  const technicalSummary = `${mixPaths.length} channels: ${apiChannels} API (2520/2510, ${apiACount > 0 && apiBCount > 0 ? '2 bus' : '1 bus'} xfmr${apiACount > 0 && apiBCount > 0 ? 's' : ''}), ${otbChannels} OTB (TX-100). ${transformerStages} iron stages, ${tubeStages} tube. Headroom: API +28 dBu → AD+ +24 dBu = 4 dB margin. Print: Pueblo D → AD+ → Aurora AES. Monitor: Aurora AES → D-Box+.`;
+
+  return {
+    totalChannels: mixPaths.length,
+    apiChannels,
+    otbChannels,
+    channelInserts,
+    tubeStages,
+    transformerStages,
+    backboneTransformers,
+    harmonicDensity,
+    headroomNote,
+    noiseTrend,
+    transientCharacter,
+    stereoImplication,
+    musicianSummary,
+    engineerSummary,
+    technicalSummary,
   };
 }

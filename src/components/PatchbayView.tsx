@@ -6,6 +6,8 @@ import type {
   Equalizer,
   InsertProcessor,
   Microphone,
+  MixAnalysis,
+  MixChannelInsert,
   OutboardProcessor,
   ParallelProcessor,
   ParallelProcessorInput,
@@ -43,8 +45,12 @@ interface Props {
   searchQuery: string;
   mixSessionTrackCount: number;
   mixPaths: MixPathModel[];
+  mixChannelInserts: MixChannelInsert[];
+  mixAnalysis: MixAnalysis;
   onSetMixSessionTrackCount: (count: number) => void;
   onUpdateMixPathDestination: (pathId: string, destination: MixPathDestinationId) => void;
+  onAddMixChannelInsert: (channelNumber: number, processor: InsertProcessor) => void;
+  onRemoveMixChannelInsert: (channelNumber: number) => void;
   onSelectMic: (m: Microphone | null) => void;
   onSelectPreamp: (p: Preamp | null) => void;
   onAddInsert: (proc: InsertProcessor) => void;
@@ -857,44 +863,90 @@ function MixSessionPlanner({
   perspective,
   trackCount,
   paths,
+  mixAnalysis,
+  channelInserts,
   onSetTrackCount,
   onUpdatePathDestination,
-  onInspect,
+  onAddChannelInsert,
+  onRemoveChannelInsert,
+  onInspect: _onInspect,
+  compressorList,
+  equalizerList,
+  outboardList,
 }: {
   perspective: Perspective;
   trackCount: number;
   paths: MixPathModel[];
+  mixAnalysis: MixAnalysis;
+  channelInserts: MixChannelInsert[];
   onSetTrackCount: (count: number) => void;
   onUpdatePathDestination: (pathId: string, destination: MixPathDestinationId) => void;
+  onAddChannelInsert: (channelNumber: number, processor: InsertProcessor) => void;
+  onRemoveChannelInsert: (channelNumber: number) => void;
   onInspect: (id: string | null) => void;
+  compressorList: typeof import('../data/compressors').compressors;
+  equalizerList: typeof import('../data/equalizers').equalizers;
+  outboardList: OutboardProcessor[];
 }) {
+  const [showAdvancedRouting, setShowAdvancedRouting] = useState(false);
+  const [insertMenuChannel, setInsertMenuChannel] = useState<number | null>(null);
+
   const lensCopy = perspective === 'musician'
-    ? 'Choose how many tracks are leaving the DAW. Each one becomes a path you can steer toward a different feel and finish.'
+    ? 'Choose how many tracks are leaving the DAW. The studio\'s normalled analog path takes it from there — the routing is built into the room.'
     : perspective === 'technical'
-      ? 'Declare the active DA outputs for the session. The planner below instantiates realistic analog route slots within the room\'s 24-output limit.'
-      : 'Set the number of DAW outputs in play. Each lane below becomes a live analog path with its own summing and print consequence.';
+      ? 'Declare the active DA outputs. The normalled topology auto-populates: DA 1–16 → Tilt → API, DA 17–24 → OTB.'
+      : 'Set the number of DAW outputs in play. The studio\'s normalled patchbay wiring handles the base routing automatically.';
 
-  const inspectMap: Record<MixPathDestinationId, string> = {
-    'api-mix-a': 'sum-api-asm164',
-    'api-mix-b': 'sum-api-asm164',
-    'otb': 'sum-tonelux-otb',
-    'pueblo-bank-a': 'sum-pueblo-hj482',
-    'pueblo-bank-b': 'sum-pueblo-hj482',
-  };
+  const apiACount = paths.filter(p => p.destination === 'api-mix-a').length;
+  const apiBCount = paths.filter(p => p.destination === 'api-mix-b').length;
+  const otbCount = paths.filter(p => p.destination === 'otb').length;
 
-  const destinationSummary = [
-    { label: 'Mix A', count: paths.filter((path) => path.destination === 'api-mix-a').length, className: 'border-amber-800/30 text-amber-300/80' },
-    { label: 'Mix B', count: paths.filter((path) => path.destination === 'api-mix-b').length, className: 'border-blue-800/30 text-blue-300/80' },
-    { label: 'OTB', count: paths.filter((path) => path.destination === 'otb').length, className: 'border-teal-800/30 text-teal-300/80' },
-    { label: 'Pueblo A', count: paths.filter((path) => path.destination === 'pueblo-bank-a').length, className: 'border-cyan-800/30 text-cyan-300/80' },
-    { label: 'Pueblo B', count: paths.filter((path) => path.destination === 'pueblo-bank-b').length, className: 'border-violet-800/30 text-violet-300/80' },
-  ].filter((entry) => entry.count > 0);
+  const backboneSteps = trackCount > 0 ? [
+    ...(apiACount + apiBCount > 0 ? [{
+      label: `Aurora DA 1–${Math.min(trackCount, 16)}`,
+      arrow: '→',
+      next: 'Tilt EQs (insert path) → API ch 1–' + Math.min(trackCount, 16),
+      tone: 'text-amber-300/80',
+    }] : []),
+    ...(otbCount > 0 ? [{
+      label: `Aurora DA 17–${16 + otbCount}`,
+      arrow: '→',
+      next: `OTB ch 1–${otbCount} (full normal)`,
+      tone: 'text-teal-300/80',
+    }] : []),
+    ...(otbCount > 0 ? [{
+      label: 'OTB TX-100 out',
+      arrow: '→',
+      next: 'API Mix B insert return (full normal)',
+      tone: 'text-teal-300/70',
+    }] : []),
+    { label: 'API Mix A L/R', arrow: '→', next: 'Pueblo Bank C', tone: 'text-amber-300/70' },
+    ...(apiBCount > 0 || otbCount > 0 ? [{
+      label: 'API Mix B L/R',
+      arrow: '→',
+      next: 'Pueblo Bank D',
+      tone: 'text-blue-300/70',
+    }] : []),
+  ] : [];
+
+  const printSteps = trackCount > 0 ? [
+    { label: 'Pueblo D out', arrow: '→', next: 'optional mastering chain' },
+    { label: 'Mastering chain', arrow: '→', next: 'AD+ (analog → AES)' },
+    { label: 'AD+ AES out', arrow: '→', next: 'Aurora AES in → DAW print' },
+  ] : [];
+
+  const monitorSteps = trackCount > 0 ? [
+    { label: 'Aurora AES', arrow: '→', next: 'D-Box+ AES in → speakers' },
+  ] : [];
+
+  const insertsByChannel = new Map<number, MixChannelInsert>();
+  for (const ins of channelInserts) insertsByChannel.set(ins.channelNumber, ins);
 
   return (
     <div className="relative z-[1] mb-4 space-y-3 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
       <div className="space-y-1">
-        <div className="text-silkscreen text-[8px]">Mix session setup</div>
-        <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>How many individual tracks are in your mix session?</div>
+        <div className="text-silkscreen text-[8px]">Mix session topology</div>
+        <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>How many tracks are in your mix session?</div>
         <p className="text-[11px] leading-relaxed text-zinc-500">{lensCopy}</p>
       </div>
 
@@ -915,65 +967,192 @@ function MixSessionPlanner({
             </ActionButton>
           ))}
         </div>
-        <div className="text-[10px] text-zinc-500">24 direct analog outputs are available before alternate routing logic takes over.</div>
       </div>
 
-      {destinationSummary.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {destinationSummary.map((entry) => (
-            <span key={entry.label} className={`mat-recess rounded-[2px] border px-2 py-0.5 text-[9px] ${entry.className}`}>
-              {entry.label} {entry.count}
-            </span>
+      {/* ── Normalled backbone ── */}
+      {backboneSteps.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Normalled backbone</div>
+          {backboneSteps.map((step, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-[10px]">
+              <span className={step.tone}>{step.label}</span>
+              <span className="text-zinc-600">{step.arrow}</span>
+              <span className="text-zinc-400">{step.next}</span>
+            </div>
           ))}
         </div>
       )}
 
-      {paths.length > 0 && (
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {paths.map((path) => (
-            <div key={path.id} className="mat-brushed-mid rounded-[3px] border border-zinc-700/30 px-2.5 py-2">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-silkscreen-faint text-[7px]">Track {path.trackNumber}</div>
-                  <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{path.routeLabel}</div>
-                </div>
-                <ActionButton type="button" onClick={() => onInspect(inspectMap[path.destination])}>Inspect</ActionButton>
-              </div>
-              <div className="mt-1 text-[10px] text-zinc-400">{path.sourceLabel}</div>
-              <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-500">Sonic result</div>
-              <p className="mt-1 text-[11px] leading-relaxed text-zinc-300/85">{path.sonicIntent}</p>
-              <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-zinc-500">Technical cause</div>
-              <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">{path.technicalNote}</p>
-              <div className="mt-2 space-y-1 text-[10px] text-zinc-400">
-                <div><span className="text-zinc-500">Print:</span> {path.printTarget}</div>
-                <div><span className="text-zinc-500">Monitor:</span> {path.monitorTarget}</div>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                <ActionButton type="button" tone="amber" active={path.destination === 'api-mix-a'} onClick={() => onUpdatePathDestination(path.id, 'api-mix-a')}>Mix A</ActionButton>
-                <ActionButton type="button" tone="blue" active={path.destination === 'api-mix-b'} onClick={() => onUpdatePathDestination(path.id, 'api-mix-b')}>Mix B</ActionButton>
-                <ActionButton type="button" tone="teal" active={path.destination === 'otb'} onClick={() => onUpdatePathDestination(path.id, 'otb')}>OTB</ActionButton>
-                <ActionButton type="button" tone="cyan" active={path.destination === 'pueblo-bank-a'} onClick={() => onUpdatePathDestination(path.id, 'pueblo-bank-a')}>Pueblo A</ActionButton>
-                <ActionButton type="button" tone="violet" active={path.destination === 'pueblo-bank-b'} onClick={() => onUpdatePathDestination(path.id, 'pueblo-bank-b')}>Pueblo B</ActionButton>
-              </div>
+      {/* ── Print tail ── */}
+      {printSteps.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Print tail</div>
+          <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
+            {printSteps.map((step, i) => (
+              <span key={i} className="contents">
+                {i > 0 && <span className="text-zinc-600">→</span>}
+                <span>{step.label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Monitor tail ── */}
+      {monitorSteps.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Monitor path</div>
+          <div className="text-[10px] text-zinc-400">{monitorSteps[0].label} {monitorSteps[0].arrow} {monitorSteps[0].next}</div>
+        </div>
+      )}
+
+      {/* ── Cumulative mix analysis ── */}
+      {trackCount > 0 && (
+        <div className="space-y-1.5 border-t border-zinc-800/20 pt-2">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Mix analysis</div>
+          <p className="text-[11px] leading-relaxed text-zinc-300/85">
+            {perspective === 'musician' ? mixAnalysis.musicianSummary : perspective === 'engineer' ? mixAnalysis.engineerSummary : mixAnalysis.technicalSummary}
+          </p>
+          {mixAnalysis.harmonicDensity !== 'minimal' && (
+            <div className="flex flex-wrap gap-1.5">
+              <span className={`mat-recess rounded-[2px] border px-2 py-0.5 text-[9px] ${
+                mixAnalysis.harmonicDensity === 'saturated' ? 'border-red-800/30 text-red-300/80' :
+                mixAnalysis.harmonicDensity === 'dense' ? 'border-amber-800/30 text-amber-300/80' :
+                'border-yellow-800/30 text-yellow-300/80'
+              }`}>
+                {mixAnalysis.harmonicDensity} harmonic density
+              </span>
+              <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2 py-0.5 text-[9px] text-zinc-400">
+                {mixAnalysis.transformerStages} iron stages
+              </span>
+              {mixAnalysis.tubeStages > 0 && (
+                <span className="mat-recess rounded-[2px] border border-orange-800/30 px-2 py-0.5 text-[9px] text-orange-300/80">
+                  {mixAnalysis.tubeStages} tube
+                </span>
+              )}
             </div>
-          ))}
+          )}
+          <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.headroomNote}</p>
+          {perspective !== 'musician' && (
+            <>
+              <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.transientCharacter}</p>
+              <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.stereoImplication}</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Per-channel inserts ── */}
+      {trackCount > 0 && (
+        <div className="space-y-2 border-t border-zinc-800/20 pt-2">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Channel patching</div>
+          <p className="text-[10px] text-zinc-500">
+            {perspective === 'musician'
+              ? 'Add outboard color to individual channels. Each insert changes the channel\'s character and shifts the cumulative mix direction.'
+              : 'Patch processors onto API insert send/return points. The Tilt EQs are normalled; additional inserts break the normal and reroute through the selected processor.'}
+          </p>
+          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-6 lg:grid-cols-8">
+            {paths.map((path) => {
+              const ins = insertsByChannel.get(path.trackNumber);
+              return (
+                <div key={path.id} className={`mat-brushed-mid rounded-[2px] border px-1.5 py-1 ${ins ? 'border-amber-700/30' : 'border-zinc-700/20'}`}>
+                  <div className="text-silkscreen-faint text-[7px]">{path.trackNumber}</div>
+                  <div className="truncate text-[9px]" style={{ color: ins ? 'var(--sa-cream)' : 'var(--sa-cream-dim)' }}>
+                    {ins ? ins.processor.item.name : path.destination === 'otb' ? 'OTB' : 'Tilt'}
+                  </div>
+                  <div className="mt-1 flex gap-0.5">
+                    {ins ? (
+                      <ActionButton type="button" onClick={() => onRemoveChannelInsert(path.trackNumber)}>✕</ActionButton>
+                    ) : (
+                      <ActionButton type="button" onClick={() => setInsertMenuChannel(insertMenuChannel === path.trackNumber ? null : path.trackNumber)}>+</ActionButton>
+                    )}
+                  </div>
+                  {insertMenuChannel === path.trackNumber && !ins && (
+                    <div className="mt-1 max-h-32 overflow-y-auto space-y-0.5">
+                      {compressorList.map(c => (
+                        <button key={c.id} type="button" onClick={() => { onAddChannelInsert(path.trackNumber, { type: 'compressor', item: c }); setInsertMenuChannel(null); }}
+                          className="block w-full truncate rounded-[2px] px-1 py-0.5 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200">
+                          {c.name}
+                        </button>
+                      ))}
+                      {equalizerList.map(e => (
+                        <button key={e.id} type="button" onClick={() => { onAddChannelInsert(path.trackNumber, { type: 'equalizer', item: e }); setInsertMenuChannel(null); }}
+                          className="block w-full truncate rounded-[2px] px-1 py-0.5 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200">
+                          {e.name}
+                        </button>
+                      ))}
+                      {outboardList.filter(o => o.routing_mode === 'inline-optional').map(o => (
+                        <button key={o.id} type="button" onClick={() => { onAddChannelInsert(path.trackNumber, { type: 'outboard', item: o }); setInsertMenuChannel(null); }}
+                          className="block w-full truncate rounded-[2px] px-1 py-0.5 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200">
+                          {o.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Advanced routing overrides ── */}
+      {trackCount > 0 && (
+        <div className="border-t border-zinc-800/20 pt-2">
+          <button type="button" onClick={() => setShowAdvancedRouting(!showAdvancedRouting)} className="text-[9px] text-zinc-500 hover:text-zinc-300">
+            {showAdvancedRouting ? '▾' : '▸'} Advanced routing overrides
+          </button>
+          {showAdvancedRouting && (
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {paths.map((path) => (
+                <div key={path.id} className="mat-brushed-mid rounded-[3px] border border-zinc-700/30 px-2.5 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-silkscreen-faint text-[7px]">Track {path.trackNumber}</div>
+                      <div className="text-sm font-medium" style={{ color: 'var(--sa-cream)' }}>{path.routeLabel}</div>
+                    </div>
+                  </div>
+                  <div className="mt-1 text-[10px] text-zinc-400">{path.sourceLabel}</div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <ActionButton type="button" tone="amber" active={path.destination === 'api-mix-a'} onClick={() => onUpdatePathDestination(path.id, 'api-mix-a')}>Mix A</ActionButton>
+                    <ActionButton type="button" tone="blue" active={path.destination === 'api-mix-b'} onClick={() => onUpdatePathDestination(path.id, 'api-mix-b')}>Mix B</ActionButton>
+                    <ActionButton type="button" tone="teal" active={path.destination === 'otb'} onClick={() => onUpdatePathDestination(path.id, 'otb')}>OTB</ActionButton>
+                    <ActionButton type="button" tone="cyan" active={path.destination === 'pueblo-bank-a'} onClick={() => onUpdatePathDestination(path.id, 'pueblo-bank-a')}>Pueblo A</ActionButton>
+                    <ActionButton type="button" tone="violet" active={path.destination === 'pueblo-bank-b'} onClick={() => onUpdatePathDestination(path.id, 'pueblo-bank-b')}>Pueblo B</ActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, mixSessionTrackCount, mixPaths, onSetMixSessionTrackCount, onUpdateMixPathDestination, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
+export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, mixSessionTrackCount, mixPaths, mixChannelInserts, mixAnalysis, onSetMixSessionTrackCount, onUpdateMixPathDestination, onAddMixChannelInsert, onRemoveMixChannelInsert, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
   const [routeMenuByKey, setRouteMenuByKey] = useState<Record<string, OutputRouteMenu>>({});
   const [outputRoutes, setOutputRoutes] = useState<Record<string, OutputRouteChoice>>({});
-  const [showCascadeView, setShowCascadeView] = useState(false);
+  const [showCascadeView, setShowCascadeView] = useState(true);
+  const [showSignalOverlay, setShowSignalOverlay] = useState(true);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
 
-    useEffect(() => {
-      const frame = window.requestAnimationFrame(() => setShowCascadeView(true));
-      return () => window.cancelAnimationFrame(frame);
-    }, []);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px), (max-height: 540px)');
+    const syncViewport = () => {
+      const compact = media.matches;
+      setIsCompactViewport(compact);
+      setShowCascadeView(!compact);
+      setShowSignalOverlay(!compact);
+    };
+
+    syncViewport();
+    media.addEventListener?.('change', syncViewport);
+
+    return () => media.removeEventListener?.('change', syncViewport);
+  }, []);
 
   // ── Hybrid mic grouping: vendor pools + topology clusters ──
   const _broadcastIds = new Set(['mic-sm7b', 'mic-ev-re20', 'mic-beyer-x99', 'mic-earthworks-ethos']);
@@ -1589,26 +1768,48 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
   };
 
   return (
-    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-2 py-2 sm:px-3 sm:py-2.5">
-      <SignalFlowOverlay
-        containerRef={scrollContainerRef}
-        perspective={perspective}
-        mode={mode}
-        selectedMic={selectedMic}
-        selectedPreamp={selectedPreamp}
-        insertChain={insertChain}
-        parallelChain={parallelChain}
-        mixPaths={mixPaths}
-      />
+    <div ref={scrollContainerRef} className="relative min-h-0 flex-1 overflow-y-auto px-2 py-2 sm:px-3 sm:py-2.5">
+      {isCompactViewport && (
+        <div className="relative z-[1] mb-3 flex flex-wrap items-center gap-1.5 rounded-[3px] border border-zinc-800/30 px-2 py-2 mat-brushed-dark mat-recess md:hidden">
+          <span className="text-silkscreen-faint text-[7px]">Mobile view</span>
+          <ActionButton type="button" tone="lens" active={showSignalOverlay} onClick={() => setShowSignalOverlay((value) => !value)}>
+            {showSignalOverlay ? 'Hide flow lines' : 'Show flow lines'}
+          </ActionButton>
+          <ActionButton type="button" tone="amber" active={showCascadeView} onClick={() => setShowCascadeView((value) => !value)}>
+            {showCascadeView ? 'Hide console map' : 'Show console map'}
+          </ActionButton>
+          <span className="text-[9px] text-zinc-500">Portrait and landscape stay focused here.</span>
+        </div>
+      )}
+
+      {(!isCompactViewport || showSignalOverlay) && (
+        <SignalFlowOverlay
+          containerRef={scrollContainerRef}
+          perspective={perspective}
+          mode={mode}
+          selectedMic={selectedMic}
+          selectedPreamp={selectedPreamp}
+          insertChain={insertChain}
+          parallelChain={parallelChain}
+          mixPaths={mixPaths}
+        />
+      )}
 
       {mode === 'mixing' && (
         <MixSessionPlanner
           perspective={perspective}
           trackCount={mixSessionTrackCount}
           paths={mixPaths}
+          mixAnalysis={mixAnalysis}
+          channelInserts={mixChannelInserts}
           onSetTrackCount={onSetMixSessionTrackCount}
           onUpdatePathDestination={onUpdateMixPathDestination}
+          onAddChannelInsert={onAddMixChannelInsert}
+          onRemoveChannelInsert={onRemoveMixChannelInsert}
           onInspect={onInspect}
+          compressorList={compressors}
+          equalizerList={equalizers}
+          outboardList={outboardProcessors}
         />
       )}
 
@@ -2102,13 +2303,24 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
         })}
       </div>
 
-      {showCascadeView ? (
-        <Suspense fallback={<div className="mt-4 mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-6 text-sm text-silkscreen-faint">Loading console and monitor path…</div>}>
-          <CascadeView mode={mode} perspective={perspective} onInspect={onInspect} />
-        </Suspense>
-      ) : (
-        <div className="mt-4 mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-6 text-sm text-silkscreen-faint">Loading console and monitor path…</div>
-      )}
+      <div className="mt-4 space-y-2">
+        {isCompactViewport && (
+          <div className="flex items-center justify-between gap-2 rounded-[3px] border border-zinc-800/20 px-3 py-1.5 text-[10px] text-zinc-400">
+            <span>Console and monitor path</span>
+            <ActionButton type="button" tone="amber" active={showCascadeView} onClick={() => setShowCascadeView((value) => !value)}>
+              {showCascadeView ? 'Collapse' : 'Expand'}
+            </ActionButton>
+          </div>
+        )}
+
+        {showCascadeView ? (
+          <Suspense fallback={<div className="mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-6 text-sm text-silkscreen-faint">Loading console and monitor path…</div>}>
+            <CascadeView mode={mode} perspective={perspective} onInspect={onInspect} />
+          </Suspense>
+        ) : (
+          <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-4 text-sm text-silkscreen-faint">Console and monitor path is collapsed for compact mobile viewing. Expand it any time.</div>
+        )}
+      </div>
 
       <div className="mt-4 space-y-2 pb-6">
         <SonicSignatureStrip signature={sonicSignature} />
@@ -2124,6 +2336,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
           parallelChain={parallelChain}
           mixSessionTrackCount={mixSessionTrackCount}
           mixPaths={mixPaths}
+          mixAnalysis={mixAnalysis}
           onClearChain={onClearChain}
         />
       </div>

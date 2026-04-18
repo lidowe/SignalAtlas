@@ -44,17 +44,17 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
   }, [searchOpen]);
 
   return (
-    <header className={`mat-brushed-dark mat-rack-panel border-b px-4 py-3 transition-colors duration-500 ${theme.bar}`}>
-      <div className="flex flex-col items-center gap-2.5 text-center">
+    <header className={`mat-brushed-dark mat-rack-panel border-b px-2.5 py-2 transition-colors duration-500 sm:px-4 sm:py-3 ${theme.bar}`}>
+      <div className="flex flex-col gap-2 text-center sm:gap-2.5">
         <div className="space-y-1 text-center">
-          <h1 className="text-base font-semibold tracking-tight" style={{ color: 'var(--sa-cream)' }}>Signal Atlas</h1>
-          <p className="max-w-3xl text-[10px] leading-relaxed lowercase" style={{ color: 'var(--sa-cream-dim)' }}>
+          <h1 className="text-sm font-semibold tracking-tight sm:text-base" style={{ color: 'var(--sa-cream)' }}>Signal Atlas</h1>
+          <p className="mx-auto max-w-3xl text-[9px] leading-relaxed lowercase sm:text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>
             experience your signal as you travel with it starting with the mic locker and preamp selection
           </p>
         </div>
 
-        <div className="flex w-full items-center gap-1 overflow-x-auto pb-0.5 sm:justify-center">
-          <div className={`flex items-center gap-1 mat-recess rounded-[3px] border px-1.5 py-1 transition-colors duration-500 ${theme.bar}`}>
+        <div className="flex w-full flex-wrap items-center justify-center gap-1.5">
+          <div className={`flex min-w-0 flex-1 items-center gap-1 mat-recess rounded-[3px] border px-1.5 py-1 transition-colors duration-500 sm:max-w-[13rem] sm:flex-none ${theme.bar}`}>
             <button
               type="button"
               onClick={() => setSearchOpen((value) => !value)}
@@ -69,7 +69,7 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
                 value={searchQuery}
                 onChange={(event) => onSearch(event.target.value)}
                 placeholder="search"
-                className="w-24 bg-transparent text-[10px] outline-none placeholder:text-zinc-600 sm:w-32"
+                className="min-w-0 flex-1 bg-transparent text-[10px] outline-none placeholder:text-zinc-600 sm:w-32 sm:flex-none"
                 style={{ color: 'var(--sa-cream-dim)' }}
               />
             )}
@@ -91,7 +91,7 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
             ))}
           </div>
 
-          <div className={`flex items-center gap-0.5 mat-recess rounded-[3px] border px-1 py-0.5 transition-colors duration-500 ${theme.bar}`}>
+          <div className={`flex flex-wrap items-center justify-center gap-0.5 mat-recess rounded-[3px] border px-1 py-0.5 transition-colors duration-500 ${theme.bar}`}>
             {perspectives.map(p => (
               <button
                 key={p.key}

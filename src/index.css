@@ -61,6 +61,7 @@ body {
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ── Atmospheric grain: subtle noise-like texture over the entire surface ── */
@@ -396,11 +397,20 @@ body::after {
   text-shadow: 0 0 3px rgba(0,0,0,0.95), 0 0 5px rgba(180,150,50,0.15);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-height: 540px) {
   .tt-jack {
     width: 15px;
     height: 15px;
     font-size: 6px;
+  }
+
+  .screwhead {
+    width: 7px;
+    height: 7px;
+  }
+
+  body::before {
+    opacity: 0.22;
   }
 }
 

@@ -31,6 +31,8 @@ function App() {
     setSearch,
     setMixSessionTrackCount,
     updateMixPathDestination,
+    addMixChannelInsert,
+    removeMixChannelInsert,
     selectMic,
     selectPreamp,
     addInsert,
@@ -47,7 +49,7 @@ function App() {
   const theme = shellTheme[state.perspective];
 
   return (
-    <div className={`studio-atlas-shell lens-${state.perspective} mode-${state.mode} h-screen h-[100svh] flex flex-col overflow-hidden text-zinc-200 transition-colors duration-500 ${theme.frame}`}>
+    <div className={`studio-atlas-shell lens-${state.perspective} mode-${state.mode} flex h-[100dvh] min-h-[100dvh] min-w-0 flex-col overflow-hidden text-zinc-200 transition-colors duration-500 ${theme.frame}`}>
       <Header
         perspective={state.perspective}
         mode={state.mode}
@@ -57,13 +59,13 @@ function App() {
         onMode={setMode}
       />
 
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <div className="pointer-events-none absolute inset-0 opacity-60">
           <div className={`absolute left-0 top-0 h-72 w-72 rounded-full blur-3xl transition-colors duration-500 ${theme.glowA}`} />
           <div className={`absolute bottom-0 right-0 h-80 w-80 rounded-full blur-3xl transition-colors duration-500 ${theme.glowB}`} />
         </div>
         {/* Main content area */}
-        <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+        <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <PatchbayView
             perspective={state.perspective}
             mode={state.mode}
@@ -78,8 +80,12 @@ function App() {
             searchQuery={state.searchQuery}
             mixSessionTrackCount={state.mixSessionTrackCount}
             mixPaths={state.mixPaths}
+            mixChannelInserts={state.mixChannelInserts}
+            mixAnalysis={state.mixAnalysis}
             onSetMixSessionTrackCount={setMixSessionTrackCount}
             onUpdateMixPathDestination={updateMixPathDestination}
+            onAddMixChannelInsert={addMixChannelInsert}
+            onRemoveMixChannelInsert={removeMixChannelInsert}
             onSelectMic={selectMic}
             onSelectPreamp={selectPreamp}
             onAddInsert={addInsert}
@@ -104,7 +110,7 @@ function App() {
               className="fixed inset-0 z-20 bg-zinc-950/70 backdrop-blur-sm lg:hidden"
             />
 
-            <aside className="fixed inset-x-0 bottom-0 top-24 z-30 overflow-y-auto mat-brushed-dark rounded-t-[3px] border border-zinc-800/30 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:border-zinc-800/20 lg:shadow-none shrink-0">
+            <aside className="fixed inset-x-0 bottom-0 top-20 z-30 max-h-[calc(100dvh-5rem)] overflow-y-auto mat-brushed-dark rounded-t-[3px] border border-zinc-800/30 shadow-2xl lg:relative lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-10 lg:max-h-none lg:w-[22rem] lg:rounded-none lg:border-l lg:border-t-0 lg:border-r-0 lg:border-b-0 lg:border-zinc-800/20 lg:shadow-none shrink-0">
               <div className="sticky top-0 z-10 border-b border-zinc-800/20 mat-brushed-dark px-4 py-2 lg:hidden">
                 <div className="mx-auto mb-2 h-1 w-12 rounded-[2px] bg-zinc-700/40" />
                 <div className="text-silkscreen-faint text-[8px]">Focused gear view</div>

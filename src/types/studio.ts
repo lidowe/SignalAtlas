@@ -484,3 +484,30 @@ export interface SonicSignature {
   transientCharacter: string;    // e.g. "open", "controlled", "aggressive"
   dominantQuality: string;       // the single strongest trait
 }
+
+// ── Mix Channel Processing ──
+
+/** Per-channel processor insert applied during mix mode */
+export interface MixChannelInsert {
+  channelNumber: number;
+  processor: InsertProcessor;
+}
+
+/** Cumulative mix analysis across the fixed backbone and all per-channel inserts */
+export interface MixAnalysis {
+  totalChannels: number;
+  apiChannels: number;
+  otbChannels: number;
+  channelInserts: MixChannelInsert[];
+  tubeStages: number;
+  transformerStages: number;
+  backboneTransformers: number;
+  harmonicDensity: 'minimal' | 'moderate' | 'dense' | 'saturated';
+  headroomNote: string;
+  noiseTrend: string;
+  transientCharacter: string;
+  stereoImplication: string;
+  musicianSummary: string;
+  engineerSummary: string;
+  technicalSummary: string;
+}
