@@ -232,7 +232,7 @@ export default function AnalysisPanel({
   perspective, mode, analysis, routeSummary, perspectiveInsight, selectedMic, selectedPreamp, insertChain, parallelChain, onClearChain,
 }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [showRouteNotes, setShowRouteNotes] = useState(false);
   const [showNarrativeDetails, setShowNarrativeDetails] = useState(false);
   const hasRouteNotes =
@@ -248,36 +248,48 @@ export default function AnalysisPanel({
         ? 'The summing and print path is standing by below.'
         : 'Choose a microphone to begin building a capture path.';
       return (
-        <div className="mat-brushed-dark border-t border-zinc-800/20 px-3 py-2.5 sm:px-4">
-          <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-2.5 space-y-1.5">
-            <div className="text-silkscreen-faint text-[8px]">Listening through</div>
-            <div className="text-[11px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
-              DAW → Thunderbolt → Aurora(n) → AES → D-Box+ → Speakers.{' '}
-              <span className="text-zinc-500">The monitor path is digital from DAW to D-Box+. {prompt}</span>
+        <div className="mat-brushed-dark rounded-[3px] border border-zinc-800/20">
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left"
+          >
+            <span className="text-silkscreen-faint text-[8px]">Listening through</span>
+            <span className="min-w-0 flex-1 truncate text-[10px] text-zinc-500">DAW → Aurora(n) → D-Box+ → Speakers</span>
+          </button>
+          {expanded && (
+            <div className="border-t border-zinc-800/20 px-3 py-2 text-[11px] leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
+              DAW → Thunderbolt → Aurora(n) → AES → D-Box+ → Speakers. <span className="text-zinc-500">The monitor path is digital from DAW to D-Box+. {prompt}</span>
             </div>
-          </div>
+          )}
         </div>
       );
     }
 
     return (
-      <div className="mat-brushed-dark border-t border-zinc-800/20 px-3 py-2 sm:px-4">
-        <div className="flex items-center justify-between gap-3 mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-2">
-          <div className="min-w-0 space-y-1">
-            <div className="text-silkscreen-faint text-[8px]">Building route</div>
-            <div className="truncate text-[11px]" style={{ color: 'var(--sa-cream-dim)' }}>{overview}</div>
+      <div className="mat-brushed-dark rounded-[3px] border border-zinc-800/20">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left"
+        >
+          <span className="text-silkscreen-faint text-[8px]">Building route</span>
+          <span className="min-w-0 flex-1 truncate text-[10px] text-zinc-500">{overview}</span>
+        </button>
+        {expanded && (
+          <div className="border-t border-zinc-800/20 px-3 py-2">
             {selectedMic && !selectedPreamp && (
               <div className="text-[10px] text-zinc-500 leading-relaxed">
                 {selectedMic.character.split('.')[0]}. Choose a preamp to complete the gain stage.
               </div>
             )}
+            {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
+              <button onClick={onClearChain} className="mt-2 shrink-0 mat-recess rounded-[3px] border border-zinc-800/20 px-2.5 py-1 text-silkscreen-faint text-[8px] hover:text-zinc-300">
+                Clear
+              </button>
+            )}
           </div>
-          {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
-            <button onClick={onClearChain} className="shrink-0 mat-recess rounded-[3px] border border-zinc-800/20 px-2.5 py-1 text-silkscreen-faint text-[8px] hover:text-zinc-300">
-              Clear
-            </button>
-          )}
-        </div>
+        )}
       </div>
     );
   }

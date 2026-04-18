@@ -3,8 +3,6 @@ import { useStudio } from './hooks/useStudio';
 import { useDemoWalkthrough } from './hooks/useDemoWalkthrough';
 import Header from './components/Header';
 import PatchbayView from './components/PatchbayView';
-import AnalysisPanel from './components/AnalysisPanel';
-import SonicSignatureStrip from './components/SonicSignatureStrip';
 
 const ComponentInspector = lazy(() => import('./components/ComponentInspector'));
 
@@ -93,6 +91,9 @@ function App() {
             insertChain={state.insertChain}
             parallelChain={state.parallelChain}
             analysis={state.analysis}
+            routeSummary={state.routeSummary}
+            perspectiveInsight={state.perspectiveInsights[state.perspective]}
+            sonicSignature={state.sonicSignature}
             searchQuery={state.searchQuery}
             onSelectMic={selectMic}
             onSelectPreamp={selectPreamp}
@@ -102,25 +103,9 @@ function App() {
             onRemoveParallel={removeParallel}
             onReorderInserts={reorderInserts}
             onInspect={inspect}
+            onClearChain={clearChain}
             equalizers={equalizers}
             outboardProcessors={outboardProcessors}
-          />
-
-          {/* Live sonic signature readout */}
-          <SonicSignatureStrip signature={state.sonicSignature} />
-
-          {/* Bottom analysis strip */}
-          <AnalysisPanel
-            perspective={state.perspective}
-            mode={state.mode}
-            analysis={state.analysis}
-            routeSummary={state.routeSummary}
-            perspectiveInsight={state.perspectiveInsights[state.perspective]}
-            selectedMic={state.selectedMic}
-            selectedPreamp={state.selectedPreamp}
-            insertChain={state.insertChain}
-            parallelChain={state.parallelChain}
-            onClearChain={clearChain}
           />
         </div>
 

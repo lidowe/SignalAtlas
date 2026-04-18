@@ -10,7 +10,10 @@ import type {
   ParallelProcessor,
   ParallelProcessorInput,
   Perspective,
+  PerspectiveInsightModel,
   Preamp,
+  RouteSummaryModel,
+  SonicSignature,
   StudioMode,
 } from '../types/studio';
 import { patchRows } from '../data/studio';
@@ -19,6 +22,8 @@ import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
 import SignalFlowOverlay from './SignalFlowOverlay';
 import MicLocker from './MicLocker';
+import AnalysisPanel from './AnalysisPanel';
+import SonicSignatureStrip from './SonicSignatureStrip';
 
 const CascadeView = lazy(() => import('./CascadeView'));
 
@@ -30,6 +35,9 @@ interface Props {
   insertChain: InsertProcessor[];
   parallelChain: ParallelProcessor[];
   analysis: ChainAnalysis | null;
+  routeSummary: RouteSummaryModel;
+  perspectiveInsight: PerspectiveInsightModel;
+  sonicSignature: SonicSignature;
   searchQuery: string;
   onSelectMic: (m: Microphone | null) => void;
   onSelectPreamp: (p: Preamp | null) => void;
@@ -39,6 +47,7 @@ interface Props {
   onRemoveParallel: (index: number) => void;
   onReorderInserts: (from: number, to: number) => void;
   onInspect: (id: string | null) => void;
+  onClearChain: () => void;
   equalizers: Equalizer[];
   outboardProcessors: OutboardProcessor[];
 }
@@ -137,24 +146,6 @@ const micTypeTone: Record<Microphone['type'], BayTone> = {
   'Field Recorder': 'violet',
 };
 
-const perspectiveTheme: Record<Perspective, { label: string; badge: string; tray: string }> = {
-  musician: {
-    label: 'Musician Lens',
-    badge: 'border-emerald-500/50 text-emerald-300/95',
-    tray: 'border-emerald-600/35',
-  },
-  engineer: {
-    label: 'Engineer Lens',
-    badge: 'border-red-500/50 text-red-300/95',
-    tray: 'border-red-600/35',
-  },
-  technical: {
-    label: 'Tech Lens',
-    badge: 'border-yellow-400/50 text-yellow-200/95',
-    tray: 'border-yellow-600/35',
-  },
-};
-
 const modeFocusedRows: Record<StudioMode, Set<string>> = {
   tracking: new Set(['row-mic-ties', 'row-preamp-in', 'row-preamp-out', 'row-aurora-ad-in', 'row-dynamics', 'row-eq']),
   mixing: new Set(['row-aurora-da-out', 'row-tilt-in', 'row-tilt-out', 'row-api-line-in', 'row-insert-send', 'row-dynamics', 'row-eq', 'row-api-mix-out', 'row-pueblo-in', 'row-ad-daw']),
@@ -196,23 +187,6 @@ function rowNormalMode(rowId: string): BayNormalMode {
   }
 }
 
-function liveRouteLabels(selectedMic: Microphone | null, selectedPreamp: Preamp | null, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): string[] {
-  const labels = [
-    selectedMic?.name,
-    selectedPreamp?.name,
-    ...insertChain.map((processor) => processor.item.name),
-    ...parallelChain.map((processor) => `${processor.item.name} return`),
-  ].filter(Boolean) as string[];
-
-  return labels.slice(0, 6);
-}
-
-function routeStateLabel(mode: StudioMode, insertChain: InsertProcessor[], parallelChain: ParallelProcessor[]): string {
-  if (parallelChain.length > 0) return 'Parallel return live';
-  if (insertChain.length > 0) return mode === 'mixing' ? 'Bus route customized' : 'Capture route customized';
-  return mode === 'mixing' ? 'Console defaults intact' : 'Capture defaults intact';
-}
-
 function SectionMarker({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-2 px-0.5">
@@ -222,40 +196,6 @@ function SectionMarker({ title, subtitle }: { title: string; subtitle: string })
       </div>
       <p className="mt-1 text-[11px] leading-relaxed text-zinc-600">{subtitle}</p>
     </div>
-  );
-}
-
-function FocusCard({
-  title,
-  value,
-  detail,
-  tone,
-  onClick,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  tone: 'amber' | 'blue' | 'teal' | 'violet';
-  onClick: () => void;
-}) {
-  const toneAccent = {
-    amber: 'hover:border-amber-600/40',
-    blue: 'hover:border-blue-600/40',
-    teal: 'hover:border-teal-600/40',
-    violet: 'hover:border-violet-600/40',
-  } as const;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-[2px] border px-2 py-1.5 text-left transition-all duration-300 ${toneAccent[tone]}`}
-      style={{ borderColor: 'var(--sa-lens-border)', backgroundColor: 'var(--sa-lens-wash)' }}
-    >
-      <div className="text-[7px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--sa-lens-text)' }}>{title}</div>
-      <div className="mt-0.5 text-[12px] font-medium leading-snug" style={{ color: 'var(--sa-cream)' }}>{value}</div>
-      <div className="text-[9px] leading-snug" style={{ color: 'var(--sa-cream-dim)' }}>{detail}</div>
-    </button>
   );
 }
 
@@ -825,7 +765,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   );
 }
 
-  export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, searchQuery, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, equalizers, outboardProcessors }: Props) {
+export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
     const [showCascadeView, setShowCascadeView] = useState(false);
@@ -965,29 +905,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
     onAddParallel(processor);
   };
 
-  const scrollToRow = (rowId: string) => {
-    const target = scrollContainerRef.current?.querySelector<HTMLElement>(`[data-row-id="${rowId}"]`);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   const guide = nextStep(mode, selectedMic, selectedPreamp, insertChain, parallelChain);
-  const guideTheme = perspectiveTheme[perspective];
-  const routeChips = liveRouteLabels(selectedMic, selectedPreamp, insertChain, parallelChain);
-  const stageTargets = mode === 'mixing'
-    ? [
-        { label: 'Playback', rowId: 'row-preamp-out' },
-        { label: 'Insert path', rowId: 'row-insert-send' },
-        { label: 'Summing', rowId: 'row-api-mix-out' },
-        { label: 'Cascade', rowId: 'row-pueblo-in' },
-        { label: 'Print', rowId: 'row-ad-daw' },
-      ]
-    : [
-        { label: 'Source', rowId: 'row-mic-ties' },
-        { label: 'Gain', rowId: 'row-preamp-in' },
-        { label: 'Dynamics', rowId: 'row-dynamics' },
-        { label: 'Tone', rowId: 'row-eq' },
-        { label: 'Capture', rowId: 'row-ad-daw' },
-      ];
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const quickResults = normalizedQuery
@@ -1375,94 +1293,7 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
   };
 
   return (
-    <>
-      {/* ── Control dock — locked below header, does not scroll ── */}
-      <div className="shrink-0 border-b px-4 py-1.5 transition-colors duration-500" style={{ borderColor: 'var(--sa-lens-border)', background: `linear-gradient(180deg, var(--sa-lens-tint) 0%, var(--sa-lens-wash) 60%, var(--sa-mode-tint, transparent) 100%)` }}>
-        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-4">
-        <FocusCard
-          title="Source"
-          value={selectedMic?.name ?? (mode === 'mixing' ? 'DAW → Aurora DA' : 'Awaiting source')}
-          detail={mode === 'mixing' ? 'Playback exits via Aurora(n) line outputs into the summing field.' : 'Choose the voice entering the room.'}
-          tone="amber"
-          onClick={() => scrollToRow(mode === 'mixing' ? 'row-preamp-out' : 'row-mic-ties')}
-        />
-        <FocusCard
-          title="Gain"
-          value={selectedPreamp?.name ?? (mode === 'mixing' ? 'API 1–16 · OTB 17–24' : 'Awaiting preamp')}
-          detail={mode === 'mixing' ? 'Aurora outputs are normalled: 1–16 via Tilt EQs to API, 17–24 to OTB.' : 'This stage determines how the source arrives.'}
-          tone="blue"
-          onClick={() => scrollToRow(mode === 'mixing' ? 'row-insert-send' : 'row-preamp-in')}
-        />
-        <FocusCard
-          title="Process"
-          value={insertChain.length + parallelChain.length > 0 ? [...insertChain.map(p => p.item.name), ...parallelChain.map(p => `${p.item.name} ∥`)].join(' → ') : 'Clean path standing by'}
-          detail={insertChain.length + parallelChain.length > 0 ? `${insertChain.length} insert${insertChain.length !== 1 ? 's' : ''}, ${parallelChain.length} parallel return${parallelChain.length !== 1 ? 's' : ''}` : 'Dynamics, EQ, and outboard are available in the field below.'}
-          tone="violet"
-          onClick={() => scrollToRow('row-dynamics')}
-        />
-        <FocusCard
-          title="Destination"
-          value={mode === 'mixing' ? 'Pueblo → AD+ → DAW' : 'Aurora AD → DAW'}
-          detail={mode === 'mixing' ? 'OTB feeds API ext input; API Mix A feeds AD+ Input A. Pueblo Bank D hardwired to AD+ Input B.' : 'The normalled path reaches Aurora(n) for conversion without extra patching.'}
-          tone="teal"
-          onClick={() => scrollToRow('row-ad-daw')}
-        />
-        </div>
-
-        <div className="mt-1 flex flex-wrap gap-1.5">
-        {stageTargets.map((target) => (
-          <ActionButton key={target.rowId} type="button" tone="lens" onClick={() => scrollToRow(target.rowId)}>
-            {target.label}
-          </ActionButton>
-        ))}
-        </div>
-
-        {/* ── Chain strip: removable chips for every patched item ── */}
-        {(selectedMic || selectedPreamp || insertChain.length > 0 || parallelChain.length > 0) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span className="text-[8px] font-semibold uppercase tracking-[0.12em] mr-1" style={{ color: 'var(--sa-lens-text)' }}>Route</span>
-
-            {selectedMic && (
-              <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-amber-700/25 bg-amber-950/15 px-1.5 py-0.5 text-[10px] text-amber-200/80">
-                {selectedMic.name}
-                <button type="button" onClick={() => onSelectMic(null)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove mic">✕</button>
-              </span>
-            )}
-
-            {selectedMic && selectedPreamp && <span className="text-[10px] text-stone-600">→</span>}
-
-            {selectedPreamp && (
-              <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-blue-700/25 bg-blue-950/15 px-1.5 py-0.5 text-[10px] text-blue-200/80">
-                {selectedPreamp.name}
-                <button type="button" onClick={() => onSelectPreamp(null)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove preamp">✕</button>
-              </span>
-            )}
-
-            {insertChain.map((proc, i) => (
-              <span key={`ins-${proc.item.id}`} className="inline-flex items-center gap-1">
-                <span className="text-[10px] text-stone-600">→</span>
-                <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-violet-700/25 bg-violet-950/15 px-1.5 py-0.5 text-[10px] text-violet-200/80">
-                  {proc.item.name}
-                  <button type="button" onClick={() => onRemoveInsert(i)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove from chain">✕</button>
-                </span>
-              </span>
-            ))}
-
-            {parallelChain.map((proc, i) => (
-              <span key={`par-${proc.item.id}`} className="inline-flex items-center gap-1">
-                <span className="text-[10px] text-stone-600">∥</span>
-                <span className="group/chip inline-flex items-center gap-1 rounded-[2px] border border-sky-700/25 bg-sky-950/15 px-1.5 py-0.5 text-[10px] text-sky-200/80">
-                  {proc.item.name}
-                  <button type="button" onClick={() => onRemoveParallel(i)} className="opacity-40 hover:opacity-90 transition-opacity" title="Remove parallel return">✕</button>
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Scrollable bay rows ── */}
-      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-4 py-4">
+    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4">
       <SignalFlowOverlay
         containerRef={scrollContainerRef}
         perspective={perspective}
@@ -1472,39 +1303,6 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
         insertChain={insertChain}
         parallelChain={parallelChain}
       />
-
-      <div className={`mb-4 mat-brushed-dark mat-rack-panel rounded-[3px] border p-4 transition-colors duration-500 ${guideTheme.tray}`} style={{ backgroundImage: 'linear-gradient(180deg, var(--sa-lens-wash) 0%, transparent 50%)' }}>
-        <div className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`mat-recess rounded-[2px] border px-2.5 py-1 text-silkscreen text-[8px] ${guideTheme.badge}`}>{guideTheme.label}</span>
-              <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2.5 py-1 text-silkscreen text-[8px]">{guide.heading}</span>
-              <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2.5 py-1 text-engraved text-[8px] uppercase tracking-[0.12em]">{routeStateLabel(mode, insertChain, parallelChain)}</span>
-            </div>
-            <p className="max-w-4xl text-sm leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>{guide.body}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {routeChips.length > 0 ? routeChips.map((label) => (
-                <span key={label} className="mat-recess rounded-[2px] border border-zinc-700/20 px-2 py-1 text-silkscreen-faint text-[8px]">{label}</span>
-              )) : (
-                <span className="mat-recess rounded-[2px] border border-zinc-800/20 px-2 py-1 text-engraved text-[8px] uppercase tracking-[0.12em]">Default route standing by</span>
-              )}
-            </div>
-          </div>
-
-          <div className="mat-recess space-y-2 rounded-[3px] px-3 py-3">
-            <div className="text-silkscreen-faint text-[8px]">Stage</div>
-            <div className="text-sm" style={{ color: 'var(--sa-cream-dim)' }}>{mode === 'mixing' ? 'Summing and print path' : 'Source to capture path'}</div>
-            <div className="text-[11px] leading-relaxed text-zinc-600">Solid straps mean direct normals. Dashed breaks indicate a half-normal field that can be tapped or redirected.</div>
-            {analysis && (
-              <div className="pt-1">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Live read</div>
-                <div className="mt-1 text-sm text-zinc-100">{analysis.bridging_ratio.toFixed(1)}:1 bridging</div>
-                <div className="mt-1 text-xs text-zinc-400">{analysis.loss_db.toFixed(2)} dB loss · {analysis.effective_bw_khz.toFixed(1)} kHz effective bandwidth</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {normalizedQuery && (
         <div className="relative z-[1] mb-4 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
@@ -1888,7 +1686,22 @@ function CompactChoice({ pointNumber, tone, title, meta, body, detailLabel = 'Un
       ) : (
         <div className="mt-4 mat-recess rounded-[3px] border border-zinc-800/20 px-4 py-6 text-sm text-silkscreen-faint">Loading console and monitor path…</div>
       )}
+
+      <div className="mt-4 space-y-2 pb-6">
+        <SonicSignatureStrip signature={sonicSignature} />
+        <AnalysisPanel
+          perspective={perspective}
+          mode={mode}
+          analysis={analysis}
+          routeSummary={routeSummary}
+          perspectiveInsight={perspectiveInsight}
+          selectedMic={selectedMic}
+          selectedPreamp={selectedPreamp}
+          insertChain={insertChain}
+          parallelChain={parallelChain}
+          onClearChain={onClearChain}
+        />
+      </div>
     </div>
-    </>
   );
 }

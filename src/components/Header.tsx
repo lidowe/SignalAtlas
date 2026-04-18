@@ -42,17 +42,16 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
   const theme = headerTheme[perspective];
 
   return (
-    <header className={`mat-brushed-dark mat-rack-panel border-b px-4 py-4 transition-colors duration-500 ${theme.bar}`}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-1">
-          <div className="text-silkscreen-faint text-[8px]">Virtual Patchbay</div>
-          <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--sa-cream)' }}>Signal Atlas</h1>
-          <p className="max-w-2xl text-xs leading-relaxed" style={{ color: 'var(--sa-cream-dim)' }}>
-            Move through the room the way the signal does: default normals stay visible, departures stay legible, and every routing choice reveals its consequence before commit.
+    <header className={`mat-brushed-dark mat-rack-panel border-b px-4 py-3 transition-colors duration-500 ${theme.bar}`}>
+      <div className="flex flex-col items-center gap-2.5 text-center">
+        <div className="space-y-1 text-center">
+          <h1 className="text-base font-semibold tracking-tight" style={{ color: 'var(--sa-cream)' }}>Signal Atlas</h1>
+          <p className="max-w-3xl text-[10px] leading-relaxed lowercase" style={{ color: 'var(--sa-cream-dim)' }}>
+            experience your signal as you travel with it starting with the mic locker and preamp selection
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
           <label className={`flex items-center gap-2 mat-recess rounded-[3px] border px-3 py-1.5 transition-colors duration-500 ${theme.bar}`}>
             <span className="text-silkscreen-faint text-[8px]">Jump</span>
             <input
