@@ -32,6 +32,7 @@ function App() {
     setMixSessionTrackCount,
     updateMixPathDestination,
     addMixChannelInsert,
+    updateMixChannelInsertReturnMode,
     removeMixChannelInsert,
     selectMic,
     selectPreamp,
@@ -85,6 +86,7 @@ function App() {
             onSetMixSessionTrackCount={setMixSessionTrackCount}
             onUpdateMixPathDestination={updateMixPathDestination}
             onAddMixChannelInsert={addMixChannelInsert}
+            onUpdateMixChannelInsertReturnMode={updateMixChannelInsertReturnMode}
             onRemoveMixChannelInsert={removeMixChannelInsert}
             onSelectMic={selectMic}
             onSelectPreamp={selectPreamp}

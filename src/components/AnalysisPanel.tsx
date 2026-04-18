@@ -265,19 +265,21 @@ export default function AnalysisPanel({
         {expanded && (
           <div className="border-t border-zinc-800/20 px-3 py-2 space-y-2">
             <p className="text-[11px] leading-relaxed text-zinc-300">{mixNarrative}</p>
-            {mixAnalysis.harmonicDensity !== 'minimal' && (
-              <div className="flex flex-wrap gap-1.5">
-                <span className={`rounded-[2px] border px-1.5 py-0.5 text-[9px] ${
-                  mixAnalysis.harmonicDensity === 'saturated' ? 'border-red-800/30 text-red-300/80' :
-                  mixAnalysis.harmonicDensity === 'dense' ? 'border-amber-800/30 text-amber-300/80' :
-                  'border-yellow-800/30 text-yellow-300/80'
-                }`}>{mixAnalysis.harmonicDensity} density</span>
-                <span className="rounded-[2px] border border-zinc-700/30 px-1.5 py-0.5 text-[9px] text-zinc-400">{mixAnalysis.transformerStages} iron</span>
-                {mixAnalysis.tubeStages > 0 && (
-                  <span className="rounded-[2px] border border-orange-800/30 px-1.5 py-0.5 text-[9px] text-orange-300/80">{mixAnalysis.tubeStages} tube</span>
-                )}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-1.5">
+              <span className={`rounded-[2px] border px-1.5 py-0.5 text-[9px] ${
+                mixAnalysis.harmonicDensity === 'saturated' ? 'border-red-800/30 text-red-300/80' :
+                mixAnalysis.harmonicDensity === 'dense' ? 'border-amber-800/30 text-amber-300/80' :
+                mixAnalysis.harmonicDensity === 'moderate' ? 'border-yellow-800/30 text-yellow-300/80' :
+                'border-zinc-700/30 text-zinc-400'
+              }`}>{mixAnalysis.harmonicDensity} density</span>
+              <span className="rounded-[2px] border border-zinc-700/30 px-1.5 py-0.5 text-[9px] text-zinc-400">{mixAnalysis.seriesReturnChannels} insert rtn</span>
+              <span className="rounded-[2px] border border-teal-800/30 px-1.5 py-0.5 text-[9px] text-teal-300/80">{mixAnalysis.puebloDirectChannels} pueblo direct</span>
+              <span className="rounded-[2px] border border-zinc-700/30 px-1.5 py-0.5 text-[9px] text-zinc-400">{mixAnalysis.transformerStages} iron</span>
+              {mixAnalysis.tubeStages > 0 && (
+                <span className="rounded-[2px] border border-orange-800/30 px-1.5 py-0.5 text-[9px] text-orange-300/80">{mixAnalysis.tubeStages} tube</span>
+              )}
+            </div>
+            <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.returnBlendNote}</p>
             <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.headroomNote}</p>
             {perspective !== 'musician' && (
               <>
@@ -370,7 +372,7 @@ export default function AnalysisPanel({
   const supportingNarrative = narrativeLines.slice(1);
 
   const perspectiveLabels: Record<Perspective, string> = {
-    musician: 'What this chain feels like',
+    musician: 'Current read',
     engineer: 'What matters in the route',
     technical: 'Electrical readout',
   };
@@ -413,6 +415,13 @@ export default function AnalysisPanel({
           {routeSummary.viability_flag.reason}
         </div>
       )}
+
+      <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-3 py-2 space-y-1">
+        <div className="text-silkscreen-faint text-[8px]">Route summary</div>
+        <p className="text-[10px] leading-relaxed text-zinc-500">
+          Follow the signal path, stage count, headroom, and reinsertion points to understand how the route is being shaped before print.
+        </p>
+      </div>
 
       {parallelPathSummary && <div className="text-[11px] text-cyan-300/90">Parallel: {parallelPathSummary}</div>}
 

@@ -29,7 +29,7 @@ export default function SonicSignatureStrip({ signature }: Props) {
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left"
       >
-        <span className="text-silkscreen-faint text-[8px]">Sonic signature</span>
+        <span className="text-silkscreen-faint text-[8px]">Route profile</span>
         <span className="min-w-0 flex-1 truncate text-[10px] text-zinc-500">
           {signature.summary}
         </span>
@@ -45,16 +45,16 @@ export default function SonicSignatureStrip({ signature }: Props) {
           {hasStages && (
             <div className="flex flex-wrap gap-3 text-[9px] tracking-wide text-zinc-500">
               <span className="flex items-center gap-1">
-                Warmth <Bar value={signature.warmth} color="bg-amber-500/60" />
+                Harmonic load <Bar value={signature.warmth} color="bg-amber-500/60" />
               </span>
               <span className="flex items-center gap-1">
-                Clarity <Bar value={signature.clarity} color="bg-sky-400/60" />
+                Spectral clarity <Bar value={signature.clarity} color="bg-sky-400/60" />
               </span>
               <span className="flex items-center gap-1">
-                Color <Bar value={signature.color} color="bg-purple-400/60" />
+                Coloration <Bar value={signature.color} color="bg-purple-400/60" />
               </span>
               <span className="flex items-center gap-1">
-                Weight <Bar value={signature.weight} color="bg-emerald-500/60" />
+                Low-mid mass <Bar value={signature.weight} color="bg-emerald-500/60" />
               </span>
             </div>
           )}

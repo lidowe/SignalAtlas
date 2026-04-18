@@ -139,7 +139,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-api-a',
       label: `API Mix A (${counts.apiMixA})`,
       type: 'summing',
-      detail: 'API 2520 bus amp + output iron — denser mids, firmer punch, more glue',
+      detail: 'API bus amplifier plus output transformer stages before print; higher harmonic accumulation and tighter remaining margin than the open Pueblo lanes',
     });
   }
 
@@ -148,7 +148,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-api-b',
       label: `API Mix B (${counts.apiMixB})`,
       type: 'summing',
-      detail: 'Independent API bus with the same iron character, kept separate for stem balance',
+      detail: 'Independent API bus with the same amplifier and transformer architecture, kept separate for balance and reintegration control',
     });
   }
 
@@ -166,7 +166,7 @@ function buildMixActivePath(mixPaths: MixPathModel[]): RouteStageSummary[] {
       id: 'mix-pueblo-open',
       label: `Open Pueblo lanes (${counts.puebloA + counts.puebloB})`,
       type: 'summing',
-      detail: 'Cleaner, lower-THD active summing branches with less iron and more separation',
+      detail: 'Cleaner active summing branches with lower stated distortion and fewer transformer stages before the final print decision',
     });
   }
 
@@ -220,7 +220,7 @@ export function buildRouteSummary(
         reason: openLaneCount > 0
           ? 'Open Pueblo lanes are active, so the session still contains intentionally unresolved print choices.'
           : counts.otb > 0
-            ? 'The session is split between the main console bus and the OTB tributary, adding a second analog color path before print.'
+            ? 'The session is split between the main console bus and the OTB tributary, adding a second analog summing stage before print.'
             : 'The session is flowing through the primary analog bus structure toward the default print and monitor chain.',
       },
       gain_margin_summary: undefined,
@@ -326,8 +326,8 @@ export function buildPerspectiveInsights(
       return {
         perspective,
         summary: openLaneCount > 0
-          ? `The mix is no longer one single center lane — ${routingNotes}. You are shaping contrasts between punch, openness, and separate stems before the final print choice.`
-          : `The mix is moving as a deliberate bus performance now — ${routingNotes}. The route itself is part of the feel, not just the gear choices inside it.`,
+          ? `The mix is no longer one single center lane — ${routingNotes}. Different channels are now combining at different points in the analog path, so the final print still contains unresolved routing consequences.`
+          : `The mix is now traveling through one committed bus structure — ${routingNotes}. The route itself changes how many stages each signal crosses before print.`,
         warnings: [],
         notes: [],
       };
@@ -336,7 +336,7 @@ export function buildPerspectiveInsights(
     if (perspective === 'engineer') {
       return {
         perspective,
-        summary: `${mixPaths.length} DA outputs are active: ${routingNotes}. API lanes invoke 2520 + transformer bus tone, the OTB tributary adds an extra TX-100 iron stage, and open Pueblo lanes stay wider-band and lower-color until you decide their re-entry.`,
+        summary: `${mixPaths.length} DA outputs are active: ${routingNotes}. API lanes add bus-amplifier and transformer stages, the OTB tributary adds an extra TX-100 stage, and open Pueblo lanes defer reinsertion while preserving a simpler summing path.`,
         warnings: [],
         notes: [],
       };
@@ -398,6 +398,8 @@ const emptyMixAnalysis: MixAnalysis = {
   apiChannels: 0,
   otbChannels: 0,
   channelInserts: [],
+  seriesReturnChannels: 0,
+  puebloDirectChannels: 0,
   tubeStages: 0,
   transformerStages: 0,
   backboneTransformers: 0,
@@ -406,9 +408,11 @@ const emptyMixAnalysis: MixAnalysis = {
   noiseTrend: 'Silent.',
   transientCharacter: 'No signal path active.',
   stereoImplication: 'No channels allocated.',
+  returnBlendNote: 'No patched returns in play.',
   musicianSummary: 'No mix session active.',
   engineerSummary: 'No mix session active.',
   technicalSummary: 'No mix session active.',
+  internalEvidence: [],
 };
 
 export function buildMixAnalysis(
@@ -417,99 +421,119 @@ export function buildMixAnalysis(
 ): MixAnalysis {
   if (mixPaths.length === 0) return emptyMixAnalysis;
 
-  const apiACount = mixPaths.filter(p => p.destination === 'api-mix-a').length;
-  const apiBCount = mixPaths.filter(p => p.destination === 'api-mix-b').length;
+  const apiACount = mixPaths.filter((p) => p.destination === 'api-mix-a').length;
+  const apiBCount = mixPaths.filter((p) => p.destination === 'api-mix-b').length;
   const apiChannels = apiACount + apiBCount;
-  const otbChannels = mixPaths.filter(p => p.destination === 'otb').length;
+  const otbChannels = mixPaths.filter((p) => p.destination === 'otb').length;
 
-  // ── Backbone transformer count ──
-  // Always: AD+ input transformer (1) + AD+ AES output transformer (1) = 2
-  // API output transformer: 1 per bus used
-  // OTB TX-100: 1 if OTB path is active
-  let backboneTransformers = 2; // AD+
-  if (apiACount > 0) backboneTransformers += 1; // Mix A bus output iron
-  if (apiBCount > 0) backboneTransformers += 1; // Mix B bus output iron
-  if (otbChannels > 0) backboneTransformers += 1; // OTB TX-100
+  let backboneTransformers = 2;
+  if (apiACount > 0) backboneTransformers += 1;
+  if (apiBCount > 0) backboneTransformers += 1;
+  if (otbChannels > 0) backboneTransformers += 1;
 
-  // ── Per-channel insert analysis ──
   let insertTubeStages = 0;
   let insertTransformers = 0;
+  let seriesReturnChannels = 0;
+  let puebloDirectChannels = 0;
+
   for (const insert of channelInserts) {
+    if (insert.returnMode === 'pueblo-direct') puebloDirectChannels += 1;
+    else seriesReturnChannels += 1;
+
     const proc = insert.processor;
     switch (proc.type) {
       case 'equalizer':
-        if (proc.item.has_transformer) insertTransformers++;
-        if (proc.item.topology === 'tube-reactive') insertTubeStages++;
+        if (proc.item.has_transformer) insertTransformers += 1;
+        if (proc.item.topology === 'tube-reactive') insertTubeStages += 1;
         break;
       case 'outboard':
-        if (proc.item.has_transformer) insertTransformers++;
+        if (proc.item.has_transformer) insertTransformers += 1;
         break;
       case 'preamp-eq':
-        if (proc.item.has_transformer) insertTransformers++;
-        if (proc.item.topology === 'all-valve' || proc.item.topology === 'hybrid-tube') insertTubeStages++;
+        if (proc.item.has_transformer) insertTransformers += 1;
+        if (proc.item.topology === 'all-valve' || proc.item.topology === 'hybrid-tube') insertTubeStages += 1;
         break;
       case 'compressor':
-        insertTransformers++; // conservative assumption
-        if (proc.item.topology === 'variable-mu' || proc.item.topology === 'fet-tube') insertTubeStages++;
+        insertTransformers += 1;
+        if (proc.item.topology === 'variable-mu' || proc.item.topology === 'fet-tube') insertTubeStages += 1;
         break;
     }
   }
 
   const tubeStages = insertTubeStages;
   const transformerStages = backboneTransformers + insertTransformers;
+  const densityScore = (backboneTransformers * 0.5) + insertTransformers + (tubeStages * 1.6) + (seriesReturnChannels * 0.8) + (puebloDirectChannels * 0.35);
 
-  // ── Harmonic density rating ──
   let harmonicDensity: MixAnalysis['harmonicDensity'] = 'minimal';
-  if (insertTransformers >= 8 || tubeStages >= 4) harmonicDensity = 'saturated';
-  else if (insertTransformers >= 4 || tubeStages >= 2) harmonicDensity = 'dense';
-  else if (insertTransformers >= 1 || tubeStages >= 1 || backboneTransformers >= 4) harmonicDensity = 'moderate';
+  if (densityScore >= 12) harmonicDensity = 'saturated';
+  else if (densityScore >= 7) harmonicDensity = 'dense';
+  else if (densityScore >= 3) harmonicDensity = 'moderate';
 
-  // ── Headroom note ──
-  const headroomNote = apiChannels > 12
-    ? 'High channel count through API bus. The 4 dB gap between API max output (+28 dBu) and AD+ clip point (+24 dBu) demands careful bus level management.'
-    : otbChannels > 0
-      ? 'OTB tributary adds a second summing stage before the API bus. Watch cumulative level: OTB → API → AD+ has more gain structure to manage.'
-      : 'Standard backbone headroom. The AD+ clips at +24 dBu while the API can push +28 dBu — maintain 4 dB margin at the bus output.';
-
-  // ── Noise trend ──
-  const noiseTrend = tubeStages > 2
-    ? `${tubeStages} tube stages across channels — cumulative tube noise raises the mix floor. The AD+ endpoint (−108 dBu) is well below, so tube inserts dominate the noise picture.`
-    : channelInserts.length > 4
-      ? `${channelInserts.length} analog insert stages across channels. Each adds its noise contribution, though the AD+ endpoint (−108 dBu) keeps the capture floor low.`
-      : 'Backbone noise dominated by the AD+ endpoint (−108 dBu). Minimal per-channel processing keeps the cumulative floor low.';
-
-  // ── Transient character ──
-  const transientCharacter = tubeStages >= 3
-    ? 'Noticeably rounded. Multiple tube stages soften attack edges cumulatively — transients arrive shaped rather than sharp.'
-    : transformerStages >= 5
-      ? 'Iron-mediated. The transformer count means transient peaks get gently compressed by magnetic saturation across multiple stages.'
+  const headroomNote = seriesReturnChannels >= 6 || apiChannels > 12
+    ? 'Several channels are re-entering through the API insert returns. That concentrates more signal into the same console bus structure, while the API can swing about +28 dBu and the AD+ clips around +24 dBu, so bus trim matters.'
+    : puebloDirectChannels > 0
+      ? 'Some patched channels are feeding Pueblo directly before print. That opens the blend and eases some API insert-return congestion, but it makes the parallel balance part of the final headroom picture.'
       : otbChannels > 0
-        ? 'Mixed. API channels retain fast transients through the 2520 path, while OTB channels arrive with TX-100 transformer rounding.'
-        : 'Fast and direct. The API 2520 path preserves transient speed; backbone transformers add minimal rounding at normal levels.';
+        ? 'OTB is active upstream of the API and print path. Watch cumulative level across OTB → API → Pueblo → AD+.'
+        : 'Standard backbone headroom: API bus into Pueblo and AD+. Keep about 4 dB of margin at the final print converter.';
 
-  // ── Stereo implication ──
-  const stereoImplication = otbChannels > 0 && apiChannels > 0
-    ? 'Split topology creates two stereo characters: API channels carry the denser, mid-forward image, while OTB channels arrive with transformer-widened depth. The merge at the API bus insert blends these two spatial profiles.'
-    : 'API-dominant routing gives a cohesive, center-weighted stereo image with iron-mediated width.';
+  const noiseTrend = tubeStages > 2
+    ? `${tubeStages} tube stages are now stacked into the mix architecture. Those valves, not the converter, become the dominant noise personality as the blend thickens.`
+    : channelInserts.length > 4
+      ? `${channelInserts.length} analog patch points are active. The cumulative floor is still manageable, but each extra analog branch adds a little haze and hum risk.`
+      : puebloDirectChannels > 0
+        ? 'Direct Pueblo returns keep the parallel contribution relatively open and quiet. The extra branches add texture more than obvious floor buildup.'
+        : 'Backbone-only or lightly patched mix. The capture chain remains comfortably below the audible noise threshold.';
 
-  // ── Perspective summaries ──
-  const musicianSummary = tubeStages >= 2
-    ? `${mixPaths.length} channels through the analog console with ${tubeStages} tube stages adding warmth. The feel is getting thicker and more saturated — expect glue and body, but watch for transient mushiness on percussive material.`
-    : channelInserts.length > 0
-      ? `${mixPaths.length} channels through the analog backbone with ${channelInserts.length} outboard insert${channelInserts.length === 1 ? '' : 's'} adding character. The mix is building density and cohesion from the iron in the signal path.`
-      : `${mixPaths.length} channels through the studio's fixed analog path. The console iron and converter transformers give the mix its baseline punch and midrange authority.`;
+  const transientCharacter = tubeStages >= 3 || (seriesReturnChannels >= 4 && transformerStages >= 6)
+    ? 'Transient edges are being softened by multiple series return stages. Expect less attack separation and more cumulative bus interaction.'
+    : puebloDirectChannels > 0 && seriesReturnChannels > 0
+      ? 'Hybrid. Series returns increase shared-bus interaction, while the direct Pueblo feeds preserve more separation before the final blend.'
+      : puebloDirectChannels > 0
+        ? 'More open. The patched channels keep more transient definition because they are blending into Pueblo directly instead of re-entering the console insert loop.'
+        : otbChannels > 0
+          ? 'Mixed. OTB lanes arrive with transformer rounding while the API channels keep the simpler console path.'
+          : 'Fast and direct. The fixed backbone is still doing more than the outboard to define the transient behavior.';
+
+  const stereoImplication = puebloDirectChannels > 0 && seriesReturnChannels > 0
+    ? 'The mix is splitting into two spatial behaviors: insert-return channels reinforce shared bus interaction, while Pueblo-direct returns keep more separation until the final blend.'
+    : puebloDirectChannels > 0
+      ? 'Direct Pueblo contributions keep layered elements more explicit in the stereo field until the last summing point.'
+      : otbChannels > 0 && apiChannels > 0
+        ? 'Split topology creates two concurrent paths: API channels share one console behavior, while OTB lanes add an extra transformer stage before they merge.'
+        : 'API-dominant routing keeps most elements interacting within the same console path and final summing structure.';
+
+  const returnBlendNote = channelInserts.length === 0
+    ? 'No outboard channels are patched yet — the mix is simply riding the normalled backbone.'
+    : puebloDirectChannels > 0 && seriesReturnChannels > 0
+      ? `${seriesReturnChannels} channel${seriesReturnChannels === 1 ? '' : 's'} are returning to the API insert path, while ${puebloDirectChannels} are feeding Pueblo directly before the final blend.`
+      : puebloDirectChannels > 0
+        ? `${puebloDirectChannels} patched channel${puebloDirectChannels === 1 ? ' is' : 's are'} feeding Pueblo directly instead of re-entering the API insert return.`
+        : `${seriesReturnChannels} patched channel${seriesReturnChannels === 1 ? ' is' : 's are'} coming back through the API insert returns, increasing shared console-bus interaction.`;
+
+  const musicianSummary = channelInserts.length === 0
+    ? `${mixPaths.length} channels are flowing through the room's normalled analog path. No extra channel patches are changing the stage count yet.`
+    : puebloDirectChannels > 0 && seriesReturnChannels > 0
+      ? `${mixPaths.length} channels are active, with ${seriesReturnChannels} re-entering the console path and ${puebloDirectChannels} blending into Pueblo directly. That means different groups are accumulating different amounts of bus interaction before the final print.`
+      : puebloDirectChannels > 0
+        ? `${mixPaths.length} channels are active, and ${puebloDirectChannels} of them are being blended straight into Pueblo. Those channels stay less entangled with the API insert-return loop until the final sum.`
+        : tubeStages >= 2
+          ? `${mixPaths.length} channels now include several tube and transformer stages. Expect more harmonic accumulation and less transient separation as the stack grows.`
+          : `${mixPaths.length} channels are active with ${channelInserts.length} extra patch${channelInserts.length === 1 ? '' : 'es'} changing how many analog stages those channels cross before print.`;
 
   const engineerSummary = channelInserts.length > 0
-    ? `${mixPaths.length} DA outputs: ${apiChannels} API${otbChannels > 0 ? `, ${otbChannels} OTB` : ''}. ${channelInserts.length} per-channel insert${channelInserts.length === 1 ? '' : 's'}. ${transformerStages} transformer stages (${backboneTransformers} backbone + ${insertTransformers} inserts). Harmonic density: ${harmonicDensity}.`
-    : `${mixPaths.length} DA outputs: ${apiChannels} API${otbChannels > 0 ? `, ${otbChannels} OTB` : ''}. Normalled backbone only. ${backboneTransformers} backbone transformers.`;
+    ? `${mixPaths.length} DA outputs: ${apiChannels} API${otbChannels > 0 ? `, ${otbChannels} OTB` : ''}. ${seriesReturnChannels} series return${seriesReturnChannels === 1 ? '' : 's'}, ${puebloDirectChannels} direct Pueblo return${puebloDirectChannels === 1 ? '' : 's'}. ${transformerStages} transformer stages total. Harmonic density is now ${harmonicDensity}.`
+    : `${mixPaths.length} DA outputs are active on the normalled backbone: ${apiChannels} API${otbChannels > 0 ? `, ${otbChannels} OTB` : ''}. No extra channel patches yet.`;
 
-  const technicalSummary = `${mixPaths.length} channels: ${apiChannels} API (2520/2510, ${apiACount > 0 && apiBCount > 0 ? '2 bus' : '1 bus'} xfmr${apiACount > 0 && apiBCount > 0 ? 's' : ''}), ${otbChannels} OTB (TX-100). ${transformerStages} iron stages, ${tubeStages} tube. Headroom: API +28 dBu → AD+ +24 dBu = 4 dB margin. Print: Pueblo D → AD+ → Aurora AES. Monitor: Aurora AES → D-Box+.`;
+  const technicalSummary = `${mixPaths.length} channels: ${apiChannels} API, ${otbChannels} OTB. ${seriesReturnChannels} insert-return channels, ${puebloDirectChannels} direct-to-Pueblo channels. ${transformerStages} iron stages, ${tubeStages} tube stages. Final print path remains Pueblo D → AD+ → Aurora AES, with monitoring on Aurora AES → D-Box+.`;
 
   return {
     totalChannels: mixPaths.length,
     apiChannels,
     otbChannels,
     channelInserts,
+    seriesReturnChannels,
+    puebloDirectChannels,
     tubeStages,
     transformerStages,
     backboneTransformers,
@@ -518,8 +542,29 @@ export function buildMixAnalysis(
     noiseTrend,
     transientCharacter,
     stereoImplication,
+    returnBlendNote,
     musicianSummary,
     engineerSummary,
     technicalSummary,
+    internalEvidence: [
+      {
+        id: 'mix-routing-topology',
+        area: 'routing',
+        level: 'documented-topology',
+        summary: `${mixPaths.length} DA outputs are distributed through the documented API, OTB, and Pueblo routing backbone.`,
+      },
+      {
+        id: 'mix-stage-accumulation',
+        area: 'harmonics',
+        level: 'derived-electrical',
+        summary: `${transformerStages} transformer stages and ${tubeStages} tube stages are counted from declared device topology and active return routing.`,
+      },
+      {
+        id: 'mix-headroom-ledger',
+        area: 'gain',
+        level: 'published-spec',
+        summary: 'Headroom guidance references the API output ceiling and the Dangerous AD+ input ceiling at the print endpoint.',
+      },
+    ],
   };
 }

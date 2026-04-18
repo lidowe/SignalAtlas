@@ -19,6 +19,7 @@ import type {
   StudioMode,
   MixPathModel,
   MixPathDestinationId,
+  MixReturnMode,
 } from '../types/studio';
 import { patchRows } from '../data/studio';
 import { microphones } from '../data/microphones';
@@ -49,7 +50,8 @@ interface Props {
   mixAnalysis: MixAnalysis;
   onSetMixSessionTrackCount: (count: number) => void;
   onUpdateMixPathDestination: (pathId: string, destination: MixPathDestinationId) => void;
-  onAddMixChannelInsert: (channelNumber: number, processor: InsertProcessor) => void;
+  onAddMixChannelInsert: (channelNumber: number, processor: InsertProcessor, returnMode?: MixReturnMode) => void;
+  onUpdateMixChannelInsertReturnMode: (channelNumber: number, returnMode: MixReturnMode) => void;
   onRemoveMixChannelInsert: (channelNumber: number) => void;
   onSelectMic: (m: Microphone | null) => void;
   onSelectPreamp: (p: Preamp | null) => void;
@@ -868,8 +870,9 @@ function MixSessionPlanner({
   onSetTrackCount,
   onUpdatePathDestination,
   onAddChannelInsert,
+  onUpdateChannelInsertReturnMode,
   onRemoveChannelInsert,
-  onInspect: _onInspect,
+  onInspect,
   compressorList,
   equalizerList,
   outboardList,
@@ -881,7 +884,8 @@ function MixSessionPlanner({
   channelInserts: MixChannelInsert[];
   onSetTrackCount: (count: number) => void;
   onUpdatePathDestination: (pathId: string, destination: MixPathDestinationId) => void;
-  onAddChannelInsert: (channelNumber: number, processor: InsertProcessor) => void;
+  onAddChannelInsert: (channelNumber: number, processor: InsertProcessor, returnMode?: MixReturnMode) => void;
+  onUpdateChannelInsertReturnMode: (channelNumber: number, returnMode: MixReturnMode) => void;
   onRemoveChannelInsert: (channelNumber: number) => void;
   onInspect: (id: string | null) => void;
   compressorList: typeof import('../data/compressors').compressors;
@@ -892,55 +896,68 @@ function MixSessionPlanner({
   const [insertMenuChannel, setInsertMenuChannel] = useState<number | null>(null);
 
   const lensCopy = perspective === 'musician'
-    ? 'Choose how many tracks are leaving the DAW. The studio\'s normalled analog path takes it from there — the routing is built into the room.'
+    ? 'Choose the number of DAW outputs in the mix. The room already knows the default path; you only patch the channels you want to color.'
     : perspective === 'technical'
-      ? 'Declare the active DA outputs. The normalled topology auto-populates: DA 1–16 → Tilt → API, DA 17–24 → OTB.'
-      : 'Set the number of DAW outputs in play. The studio\'s normalled patchbay wiring handles the base routing automatically.';
+      ? 'Declare the active outputs, then inspect or patch departures from the normalled backbone: DA 1–16 → Tilt/API, DA 17–24 → OTB, then Pueblo → AD+ → D-Box.'
+      : 'Pick the track count and the studio auto-populates the fixed summing backbone. The next engineering move is selective patching, not rebuilding the route chart.';
 
-  const apiACount = paths.filter(p => p.destination === 'api-mix-a').length;
-  const apiBCount = paths.filter(p => p.destination === 'api-mix-b').length;
-  const otbCount = paths.filter(p => p.destination === 'otb').length;
-
-  const backboneSteps = trackCount > 0 ? [
-    ...(apiACount + apiBCount > 0 ? [{
-      label: `Aurora DA 1–${Math.min(trackCount, 16)}`,
-      arrow: '→',
-      next: 'Tilt EQs (insert path) → API ch 1–' + Math.min(trackCount, 16),
-      tone: 'text-amber-300/80',
-    }] : []),
-    ...(otbCount > 0 ? [{
-      label: `Aurora DA 17–${16 + otbCount}`,
-      arrow: '→',
-      next: `OTB ch 1–${otbCount} (full normal)`,
-      tone: 'text-teal-300/80',
-    }] : []),
-    ...(otbCount > 0 ? [{
-      label: 'OTB TX-100 out',
-      arrow: '→',
-      next: 'API Mix B insert return (full normal)',
-      tone: 'text-teal-300/70',
-    }] : []),
-    { label: 'API Mix A L/R', arrow: '→', next: 'Pueblo Bank C', tone: 'text-amber-300/70' },
-    ...(apiBCount > 0 || otbCount > 0 ? [{
-      label: 'API Mix B L/R',
-      arrow: '→',
-      next: 'Pueblo Bank D',
-      tone: 'text-blue-300/70',
-    }] : []),
-  ] : [];
-
-  const printSteps = trackCount > 0 ? [
-    { label: 'Pueblo D out', arrow: '→', next: 'optional mastering chain' },
-    { label: 'Mastering chain', arrow: '→', next: 'AD+ (analog → AES)' },
-    { label: 'AD+ AES out', arrow: '→', next: 'Aurora AES in → DAW print' },
-  ] : [];
-
-  const monitorSteps = trackCount > 0 ? [
-    { label: 'Aurora AES', arrow: '→', next: 'D-Box+ AES in → speakers' },
-  ] : [];
-
+  const apiCount = paths.filter((p) => p.destination === 'api-mix-a' || p.destination === 'api-mix-b').length;
+  const apiBCount = paths.filter((p) => p.destination === 'api-mix-b').length;
+  const otbCount = paths.filter((p) => p.destination === 'otb').length;
   const insertsByChannel = new Map<number, MixChannelInsert>();
   for (const ins of channelInserts) insertsByChannel.set(ins.channelNumber, ins);
+
+  const flowStages = trackCount > 0 ? [
+    {
+      key: 'aurora',
+      inspectId: 'aurora',
+      label: `Aurora ${trackCount <= 16 ? `1–${trackCount}` : '1–24'}`,
+      detail: 'DA playback split',
+      accent: 'border-sky-700/30 text-sky-200',
+    },
+    ...(Math.min(trackCount, 16) > 0 ? [{
+      key: 'tilt',
+      inspectId: 'eq-tonelux-tilt-1',
+      label: `Tilt → API ${Math.min(trackCount, 16)}`,
+      detail: 'normalled insert tone',
+      accent: 'border-amber-700/30 text-amber-200',
+    }] : []),
+    ...(otbCount > 0 ? [{
+      key: 'otb',
+      inspectId: 'otb',
+      label: `OTB ${otbCount}`,
+      detail: 'DA 17–24 tributary',
+      accent: 'border-teal-700/30 text-teal-200',
+    }] : []),
+    {
+      key: 'api',
+      inspectId: 'api',
+      label: apiBCount > 0 || otbCount > 0 ? 'API Mix A/B' : 'API Mix A',
+      detail: `${apiCount} console lane${apiCount === 1 ? '' : 's'}`,
+      accent: 'border-red-700/30 text-red-200',
+    },
+    {
+      key: 'pueblo',
+      inspectId: 'pueblo',
+      label: mixAnalysis.puebloDirectChannels > 0 ? 'Pueblo sum + direct returns' : 'Pueblo print bus',
+      detail: 'cascade / final blend',
+      accent: 'border-green-700/30 text-green-200',
+    },
+    {
+      key: 'adplus',
+      inspectId: 'adplus',
+      label: 'Dangerous AD+',
+      detail: 'final capture',
+      accent: 'border-fuchsia-700/30 text-fuchsia-200',
+    },
+    {
+      key: 'dbox',
+      inspectId: 'dbox-sum',
+      label: 'D-Box+ monitors',
+      detail: 'what you hear live',
+      accent: 'border-cyan-700/30 text-cyan-200',
+    },
+  ] : [];
 
   return (
     <div className="relative z-[1] mb-4 space-y-3 mat-brushed-dark mat-recess rounded-[3px] border border-zinc-800/30 p-3">
@@ -969,69 +986,78 @@ function MixSessionPlanner({
         </div>
       </div>
 
-      {/* ── Normalled backbone ── */}
-      {backboneSteps.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Normalled backbone</div>
-          {backboneSteps.map((step, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[10px]">
-              <span className={step.tone}>{step.label}</span>
-              <span className="text-zinc-600">{step.arrow}</span>
-              <span className="text-zinc-400">{step.next}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {flowStages.length > 0 && (
+        <div className="space-y-2 border-t border-zinc-800/20 pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Compact signal story</div>
+            <div className="text-[9px] text-zinc-500">Click any stage for details</div>
+          </div>
 
-      {/* ── Print tail ── */}
-      {printSteps.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Print tail</div>
-          <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
-            {printSteps.map((step, i) => (
-              <span key={i} className="contents">
-                {i > 0 && <span className="text-zinc-600">→</span>}
-                <span>{step.label}</span>
-              </span>
-            ))}
+          <div className="overflow-x-auto pb-1">
+            <div className="flex min-w-max items-center gap-1.5">
+              {flowStages.map((stage, index) => (
+                <div key={stage.key} className="contents">
+                  <button
+                    type="button"
+                    onClick={() => onInspect(stage.inspectId)}
+                    className={`mat-recess rounded-[3px] border px-3 py-2 text-left transition hover:ring-1 hover:ring-white/10 ${stage.accent}`}
+                  >
+                    <div className="text-[10px] font-medium" style={{ color: 'var(--sa-cream)' }}>{stage.label}</div>
+                    <div className="text-[9px] text-zinc-500">{stage.detail}</div>
+                  </button>
+                  {index < flowStages.length - 1 && <span className="shrink-0 text-zinc-600">→</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-2.5 py-2">
+              <div className="text-silkscreen-faint text-[8px]">Flow outcome</div>
+              <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">{mixAnalysis.returnBlendNote}</p>
+            </div>
+            <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-2.5 py-2">
+              <div className="text-silkscreen-faint text-[8px]">Print tail</div>
+              <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">Pueblo D → mastering chain → AD+ → Aurora AES → print track.</p>
+            </div>
+            <div className="mat-recess rounded-[3px] border border-zinc-800/20 px-2.5 py-2">
+              <div className="text-silkscreen-faint text-[8px]">Monitor tail</div>
+              <p className="mt-1 text-[10px] leading-relaxed text-zinc-400">Aurora AES → D-Box+ AES → speakers, independent of the patch decisions below.</p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Monitor tail ── */}
-      {monitorSteps.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Monitor path</div>
-          <div className="text-[10px] text-zinc-400">{monitorSteps[0].label} {monitorSteps[0].arrow} {monitorSteps[0].next}</div>
-        </div>
-      )}
-
-      {/* ── Cumulative mix analysis ── */}
       {trackCount > 0 && (
         <div className="space-y-1.5 border-t border-zinc-800/20 pt-2">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Mix analysis</div>
+          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Cumulative mix analysis</div>
           <p className="text-[11px] leading-relaxed text-zinc-300/85">
             {perspective === 'musician' ? mixAnalysis.musicianSummary : perspective === 'engineer' ? mixAnalysis.engineerSummary : mixAnalysis.technicalSummary}
           </p>
-          {mixAnalysis.harmonicDensity !== 'minimal' && (
-            <div className="flex flex-wrap gap-1.5">
-              <span className={`mat-recess rounded-[2px] border px-2 py-0.5 text-[9px] ${
-                mixAnalysis.harmonicDensity === 'saturated' ? 'border-red-800/30 text-red-300/80' :
-                mixAnalysis.harmonicDensity === 'dense' ? 'border-amber-800/30 text-amber-300/80' :
-                'border-yellow-800/30 text-yellow-300/80'
-              }`}>
-                {mixAnalysis.harmonicDensity} harmonic density
+          <div className="flex flex-wrap gap-1.5">
+            <span className={`mat-recess rounded-[2px] border px-2 py-0.5 text-[9px] ${
+              mixAnalysis.harmonicDensity === 'saturated' ? 'border-red-800/30 text-red-300/80' :
+              mixAnalysis.harmonicDensity === 'dense' ? 'border-amber-800/30 text-amber-300/80' :
+              mixAnalysis.harmonicDensity === 'moderate' ? 'border-yellow-800/30 text-yellow-300/80' :
+              'border-zinc-700/30 text-zinc-400'
+            }`}>
+              {mixAnalysis.harmonicDensity} density
+            </span>
+            <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2 py-0.5 text-[9px] text-zinc-400">
+              {mixAnalysis.seriesReturnChannels} insert return
+            </span>
+            <span className="mat-recess rounded-[2px] border border-teal-800/30 px-2 py-0.5 text-[9px] text-teal-300/80">
+              {mixAnalysis.puebloDirectChannels} direct to Pueblo
+            </span>
+            <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2 py-0.5 text-[9px] text-zinc-400">
+              {mixAnalysis.transformerStages} iron stages
+            </span>
+            {mixAnalysis.tubeStages > 0 && (
+              <span className="mat-recess rounded-[2px] border border-orange-800/30 px-2 py-0.5 text-[9px] text-orange-300/80">
+                {mixAnalysis.tubeStages} tube
               </span>
-              <span className="mat-recess rounded-[2px] border border-zinc-700/30 px-2 py-0.5 text-[9px] text-zinc-400">
-                {mixAnalysis.transformerStages} iron stages
-              </span>
-              {mixAnalysis.tubeStages > 0 && (
-                <span className="mat-recess rounded-[2px] border border-orange-800/30 px-2 py-0.5 text-[9px] text-orange-300/80">
-                  {mixAnalysis.tubeStages} tube
-                </span>
-              )}
-            </div>
-          )}
+            )}
+          </div>
           <p className="text-[10px] leading-relaxed text-zinc-500">{mixAnalysis.headroomNote}</p>
           {perspective !== 'musician' && (
             <>
@@ -1042,61 +1068,118 @@ function MixSessionPlanner({
         </div>
       )}
 
-      {/* ── Per-channel inserts ── */}
       {trackCount > 0 && (
         <div className="space-y-2 border-t border-zinc-800/20 pt-2">
-          <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Channel patching</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500">Patch the line outputs you want to color</div>
+            <div className="text-[9px] text-zinc-500">{channelInserts.length} patched / {trackCount} available</div>
+          </div>
           <p className="text-[10px] text-zinc-500">
-            {perspective === 'musician'
-              ? 'Add outboard color to individual channels. Each insert changes the channel\'s character and shifts the cumulative mix direction.'
-              : 'Patch processors onto API insert send/return points. The Tilt EQs are normalled; additional inserts break the normal and reroute through the selected processor.'}
+            Patch any chosen output into outboard, then decide whether it returns to the insert path for series reinsertion or lands in Pueblo directly as a separate summing contribution.
           </p>
-          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-6 lg:grid-cols-8">
-            {paths.map((path) => {
-              const ins = insertsByChannel.get(path.trackNumber);
-              return (
-                <div key={path.id} className={`mat-brushed-mid rounded-[2px] border px-1.5 py-1 ${ins ? 'border-amber-700/30' : 'border-zinc-700/20'}`}>
-                  <div className="text-silkscreen-faint text-[7px]">{path.trackNumber}</div>
-                  <div className="truncate text-[9px]" style={{ color: ins ? 'var(--sa-cream)' : 'var(--sa-cream-dim)' }}>
-                    {ins ? ins.processor.item.name : path.destination === 'otb' ? 'OTB' : 'Tilt'}
-                  </div>
-                  <div className="mt-1 flex gap-0.5">
-                    {ins ? (
-                      <ActionButton type="button" onClick={() => onRemoveChannelInsert(path.trackNumber)}>✕</ActionButton>
-                    ) : (
-                      <ActionButton type="button" onClick={() => setInsertMenuChannel(insertMenuChannel === path.trackNumber ? null : path.trackNumber)}>+</ActionButton>
+
+          <div className="overflow-x-auto pb-1">
+            <div className="flex min-w-max gap-2">
+              {paths.map((path) => {
+                const ins = insertsByChannel.get(path.trackNumber);
+                const isOtbLane = path.destination === 'otb';
+                const pathLabel = isOtbLane ? 'DA → OTB' : 'DA → Tilt/API';
+
+                return (
+                  <div key={path.id} className={`w-[12rem] shrink-0 rounded-[3px] border px-2.5 py-2 mat-brushed-mid ${ins ? 'border-amber-700/30' : 'border-zinc-700/20'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-silkscreen-faint text-[7px]">Line out {path.trackNumber}</div>
+                        <button type="button" onClick={() => onInspect(isOtbLane ? 'otb' : 'api')} className="text-left text-[10px] text-zinc-300 hover:text-white">
+                          {pathLabel}
+                        </button>
+                      </div>
+                      {ins ? (
+                        <ActionButton type="button" onClick={() => onRemoveChannelInsert(path.trackNumber)}>✕</ActionButton>
+                      ) : (
+                        <ActionButton type="button" tone="amber" onClick={() => setInsertMenuChannel(insertMenuChannel === path.trackNumber ? null : path.trackNumber)}>Patch</ActionButton>
+                      )}
+                    </div>
+
+                    <div className="mt-1 min-h-[2rem] text-[10px] leading-relaxed" style={{ color: ins ? 'var(--sa-cream)' : 'var(--sa-cream-dim)' }}>
+                      {ins ? ins.processor.item.name : 'Suggested next move: route this line output into a compressor, EQ, or other inline color stage.'}
+                    </div>
+
+                    {ins && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-silkscreen-faint text-[7px]">Return mode</div>
+                        <div className="flex flex-wrap gap-1">
+                          <ActionButton
+                            type="button"
+                            tone="amber"
+                            active={ins.returnMode === 'insert-return'}
+                            onClick={() => onUpdateChannelInsertReturnMode(path.trackNumber, 'insert-return')}
+                          >
+                            Insert return
+                          </ActionButton>
+                          <ActionButton
+                            type="button"
+                            tone="teal"
+                            active={ins.returnMode === 'pueblo-direct'}
+                            onClick={() => onUpdateChannelInsertReturnMode(path.trackNumber, 'pueblo-direct')}
+                          >
+                            To Pueblo
+                          </ActionButton>
+                        </div>
+                      </div>
+                    )}
+
+                    {insertMenuChannel === path.trackNumber && !ins && (
+                      <div className="mt-2 max-h-40 overflow-y-auto rounded-[3px] border border-zinc-800/20 bg-zinc-950/40 p-1 space-y-0.5">
+                        {compressorList.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              onAddChannelInsert(path.trackNumber, { type: 'compressor', item: c }, 'insert-return');
+                              setInsertMenuChannel(null);
+                            }}
+                            className="block w-full truncate rounded-[2px] px-1.5 py-1 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                        {equalizerList.map((e) => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            onClick={() => {
+                              onAddChannelInsert(path.trackNumber, { type: 'equalizer', item: e }, 'insert-return');
+                              setInsertMenuChannel(null);
+                            }}
+                            className="block w-full truncate rounded-[2px] px-1.5 py-1 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                          >
+                            {e.name}
+                          </button>
+                        ))}
+                        {outboardList.filter((o) => o.routing_mode === 'inline-optional').map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            onClick={() => {
+                              onAddChannelInsert(path.trackNumber, { type: 'outboard', item: o }, 'insert-return');
+                              setInsertMenuChannel(null);
+                            }}
+                            className="block w-full truncate rounded-[2px] px-1.5 py-1 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                          >
+                            {o.name}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {insertMenuChannel === path.trackNumber && !ins && (
-                    <div className="mt-1 max-h-32 overflow-y-auto space-y-0.5">
-                      {compressorList.map(c => (
-                        <button key={c.id} type="button" onClick={() => { onAddChannelInsert(path.trackNumber, { type: 'compressor', item: c }); setInsertMenuChannel(null); }}
-                          className="block w-full truncate rounded-[2px] px-1 py-0.5 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200">
-                          {c.name}
-                        </button>
-                      ))}
-                      {equalizerList.map(e => (
-                        <button key={e.id} type="button" onClick={() => { onAddChannelInsert(path.trackNumber, { type: 'equalizer', item: e }); setInsertMenuChannel(null); }}
-                          className="block w-full truncate rounded-[2px] px-1 py-0.5 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200">
-                          {e.name}
-                        </button>
-                      ))}
-                      {outboardList.filter(o => o.routing_mode === 'inline-optional').map(o => (
-                        <button key={o.id} type="button" onClick={() => { onAddChannelInsert(path.trackNumber, { type: 'outboard', item: o }); setInsertMenuChannel(null); }}
-                          className="block w-full truncate rounded-[2px] px-1 py-0.5 text-left text-[8px] text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200">
-                          {o.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Advanced routing overrides ── */}
       {trackCount > 0 && (
         <div className="border-t border-zinc-800/20 pt-2">
           <button type="button" onClick={() => setShowAdvancedRouting(!showAdvancedRouting)} className="text-[9px] text-zinc-500 hover:text-zinc-300">
@@ -1130,7 +1213,7 @@ function MixSessionPlanner({
   );
 }
 
-export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, mixSessionTrackCount, mixPaths, mixChannelInserts, mixAnalysis, onSetMixSessionTrackCount, onUpdateMixPathDestination, onAddMixChannelInsert, onRemoveMixChannelInsert, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
+export default function PatchbayView({ perspective, mode, selectedMic, selectedPreamp, insertChain, parallelChain, analysis, routeSummary, perspectiveInsight, sonicSignature, searchQuery, mixSessionTrackCount, mixPaths, mixChannelInserts, mixAnalysis, onSetMixSessionTrackCount, onUpdateMixPathDestination, onAddMixChannelInsert, onUpdateMixChannelInsertReturnMode, onRemoveMixChannelInsert, onSelectMic, onSelectPreamp, onAddInsert, onAddParallel, onRemoveInsert, onRemoveParallel, onReorderInserts: _onReorderInserts, onInspect, onClearChain, equalizers, outboardProcessors }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [openSectionByRow, setOpenSectionByRow] = useState<Record<string, string | null>>({});
   const [routeMenuByKey, setRouteMenuByKey] = useState<Record<string, OutputRouteMenu>>({});
@@ -1805,6 +1888,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
           onSetTrackCount={onSetMixSessionTrackCount}
           onUpdatePathDestination={onUpdateMixPathDestination}
           onAddChannelInsert={onAddMixChannelInsert}
+          onUpdateChannelInsertReturnMode={onUpdateMixChannelInsertReturnMode}
           onRemoveChannelInsert={onRemoveMixChannelInsert}
           onInspect={onInspect}
           compressorList={compressors}

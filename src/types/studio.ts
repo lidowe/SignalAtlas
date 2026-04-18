@@ -392,6 +392,15 @@ export interface ViabilityFlag {
   reason: string;
 }
 
+export type ClaimEvidenceLevel = 'documented-topology' | 'published-spec' | 'derived-electrical' | 'bench-measured' | 'studio-observed';
+
+export interface ClaimEvidence {
+  id: string;
+  area: 'routing' | 'gain' | 'impedance' | 'converter' | 'harmonics' | 'dynamics';
+  level: ClaimEvidenceLevel;
+  summary: string;
+}
+
 export interface RouteSummaryModel {
   status: RouteStatus;
   headline: string;
@@ -483,14 +492,19 @@ export interface SonicSignature {
   weight: number;                // 0–1 (low-end mass / body)
   transientCharacter: string;    // e.g. "open", "controlled", "aggressive"
   dominantQuality: string;       // the single strongest trait
+  internalEvidence: ClaimEvidence[];
 }
 
 // ── Mix Channel Processing ──
+
+/** How a patched mix channel re-enters the analog mix path. */
+export type MixReturnMode = 'insert-return' | 'pueblo-direct';
 
 /** Per-channel processor insert applied during mix mode */
 export interface MixChannelInsert {
   channelNumber: number;
   processor: InsertProcessor;
+  returnMode: MixReturnMode;
 }
 
 /** Cumulative mix analysis across the fixed backbone and all per-channel inserts */
@@ -499,6 +513,8 @@ export interface MixAnalysis {
   apiChannels: number;
   otbChannels: number;
   channelInserts: MixChannelInsert[];
+  seriesReturnChannels: number;
+  puebloDirectChannels: number;
   tubeStages: number;
   transformerStages: number;
   backboneTransformers: number;
@@ -507,7 +523,9 @@ export interface MixAnalysis {
   noiseTrend: string;
   transientCharacter: string;
   stereoImplication: string;
+  returnBlendNote: string;
   musicianSummary: string;
   engineerSummary: string;
   technicalSummary: string;
+  internalEvidence: ClaimEvidence[];
 }

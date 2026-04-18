@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature, MixPathModel, MixPathDestinationId, MixChannelInsert, MixAnalysis } from '../types/studio';
+import type { Perspective, Microphone, Preamp, ChainNode, ChainAnalysis, InsertProcessor, ParallelProcessor, ParallelProcessorInput, PatchGraphModel, RouteValidationIssue, StudioMode, SonicSignature, MixPathModel, MixPathDestinationId, MixChannelInsert, MixAnalysis, MixReturnMode } from '../types/studio';
 import { microphones } from '../data/microphones';
 import { preamps } from '../data/preamps';
 import { compressors } from '../data/compressors';
@@ -218,17 +218,29 @@ export function useStudio() {
     });
   }, []);
 
-  const addMixChannelInsert = useCallback((channelNumber: number, processor: InsertProcessor) => {
+  const addMixChannelInsert = useCallback((channelNumber: number, processor: InsertProcessor, returnMode: MixReturnMode = 'insert-return') => {
     setState((s) => {
       if (channelNumber < 1 || channelNumber > s.mixSessionTrackCount) return s;
-      // Replace existing insert on same channel, or add new
-      const exists = s.mixChannelInserts.some(i => i.channelNumber === channelNumber);
-      const mixChannelInserts = exists
-        ? s.mixChannelInserts.map(i => i.channelNumber === channelNumber ? { channelNumber, processor } : i)
-        : [...s.mixChannelInserts, { channelNumber, processor }];
+      const existing = s.mixChannelInserts.find((i) => i.channelNumber === channelNumber);
+      const resolvedReturnMode = existing?.returnMode ?? returnMode;
+      const mixChannelInserts = existing
+        ? s.mixChannelInserts.map((i) => i.channelNumber === channelNumber ? { channelNumber, processor, returnMode: resolvedReturnMode } : i)
+        : [...s.mixChannelInserts, { channelNumber, processor, returnMode: resolvedReturnMode }];
       const mixAnalysis = buildMixAnalysis(s.mixPaths, mixChannelInserts);
 
       return { ...s, mixChannelInserts, mixAnalysis, inspectedId: processor.item.id };
+    });
+  }, []);
+
+  const updateMixChannelInsertReturnMode = useCallback((channelNumber: number, returnMode: MixReturnMode) => {
+    setState((s) => {
+      const hasChannel = s.mixChannelInserts.some((i) => i.channelNumber === channelNumber);
+      if (!hasChannel) return s;
+
+      const mixChannelInserts = s.mixChannelInserts.map((i) => i.channelNumber === channelNumber ? { ...i, returnMode } : i);
+      const mixAnalysis = buildMixAnalysis(s.mixPaths, mixChannelInserts);
+
+      return { ...s, mixChannelInserts, mixAnalysis };
     });
   }, []);
 
@@ -446,6 +458,7 @@ export function useStudio() {
     setMixSessionTrackCount,
     updateMixPathDestination,
     addMixChannelInsert,
+    updateMixChannelInsertReturnMode,
     removeMixChannelInsert,
     selectMic,
     selectPreamp,

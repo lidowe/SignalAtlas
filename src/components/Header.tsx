@@ -48,8 +48,8 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
       <div className="flex flex-col gap-2 text-center sm:gap-2.5">
         <div className="space-y-1 text-center">
           <h1 className="text-sm font-semibold tracking-tight sm:text-base" style={{ color: 'var(--sa-cream)' }}>Signal Atlas</h1>
-          <p className="mx-auto max-w-3xl text-[9px] leading-relaxed lowercase sm:text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>
-            experience your signal as you travel with it starting with the mic locker and preamp selection
+          <p className="mx-auto max-w-3xl text-[9px] leading-relaxed sm:text-[10px]" style={{ color: 'var(--sa-cream-dim)' }}>
+            trace the studio path, inspect the signal chain, and understand the full route before you commit it
           </p>
         </div>
 
