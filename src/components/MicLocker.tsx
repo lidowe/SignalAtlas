@@ -75,9 +75,9 @@ interface MicLockerProps {
 // ── Drawer handle SVG — the little pull handle on each closed drawer ──
 function DrawerHandle({ accent }: { accent: string }) {
   return (
-    <svg width="28" height="6" viewBox="0 0 28 6" fill="none" className="opacity-50 group-hover/drawer:opacity-80 transition-opacity">
-      <rect x="0" y="0" width="28" height="6" rx="3" fill={accent} fillOpacity={0.12} />
-      <rect x="2" y="2" width="24" height="2" rx="1" fill={accent} fillOpacity={0.2} />
+    <svg width="18" height="4" viewBox="0 0 18 4" fill="none" className="opacity-60 transition-opacity group-hover/drawer:opacity-90">
+      <rect x="0" y="0" width="18" height="4" rx="2" fill={accent} fillOpacity={0.14} />
+      <rect x="1.5" y="1.25" width="15" height="1.5" rx="0.75" fill={accent} fillOpacity={0.24} />
     </svg>
   );
 }
@@ -161,9 +161,9 @@ export default function MicLocker({ groups, selectedMic, onSelectMic, onInspect,
       }} />
 
       {/* ── Cabinet interior ── */}
-      <div className="relative px-2.5 py-2 md:px-3 md:py-2.5">
+      <div className="relative px-2 py-1.5 md:px-2.5 md:py-2">
         {/* Nameplate */}
-        <div className="mb-2.5 flex items-center gap-3">
+        <div className="mb-1.5 flex items-center gap-2">
           <span className={isNext ? 'led led-amber' : micActive ? 'led led-green' : 'led led-off'} />
           <div className="locker-nameplate rounded-[2px] border border-amber-800/15 px-3 py-1" style={{
             background: 'linear-gradient(135deg, rgba(180,140,80,0.08) 0%, rgba(120,90,50,0.04) 100%)',
@@ -177,7 +177,7 @@ export default function MicLocker({ groups, selectedMic, onSelectMic, onInspect,
         </div>
 
         {/* ── Drawer grid: cabinet face ── */}
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {groups.map(group => {
             const hue = lockerHueFromTone(group.tone);
             const isOpen = openDrawer === group.label;
@@ -189,41 +189,41 @@ export default function MicLocker({ groups, selectedMic, onSelectMic, onInspect,
                 <button
                   type="button"
                   onClick={() => toggleDrawer(group.label)}
-                  className={`group/drawer locker-drawer relative flex w-full flex-col items-center justify-center gap-1 rounded-[3px] border text-center transition-all duration-250 ${
+                  className={`group/drawer locker-drawer relative flex w-full items-center gap-2 rounded-[2px] border text-left transition-all duration-250 ${
                     isOpen
-                      ? 'border-stone-600/30 locker-drawer-open py-1.5 px-1.5'
+                      ? 'border-stone-600/30 locker-drawer-open px-2 py-1.5'
                       : hasSelected
-                        ? 'border-stone-600/25 locker-drawer-active py-2.5 px-2'
-                        : 'border-stone-800/20 py-2.5 px-2 hover:border-stone-700/30'
+                        ? 'border-stone-600/25 locker-drawer-active px-2 py-1.5'
+                        : 'border-stone-800/20 px-2 py-1.5 hover:border-stone-700/30'
                   }`}
                   style={{ '--drawer-accent': hue.accent } as React.CSSProperties}
                 >
-                  {/* Drawer face silhouette */}
-                  <span className={`flex h-6 w-5 items-center justify-center transition-opacity duration-200 ${isOpen ? 'opacity-40' : 'opacity-55 group-hover/drawer:opacity-75'}`}>
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center transition-opacity duration-200 ${isOpen ? 'opacity-45' : 'opacity-65 group-hover/drawer:opacity-90'}`}>
                     <GearSilhouette form={micFormFor(group.mics[0].type)} accent={hue.accent} className="h-full w-full" />
                   </span>
 
-                  {/* Drawer label */}
-                  <span className="block truncate text-[10px] font-medium leading-tight" style={{ color: 'var(--sa-cream-dim)', maxWidth: '100%' }}>
-                    {group.label}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight" style={{ color: 'var(--sa-cream-dim)' }}>
+                      {group.label}
+                    </span>
+                    <span className="block text-[7px] text-stone-500">tap to open</span>
                   </span>
 
-                  {/* Count + handle */}
-                  <span className={`text-[9px] tabular-nums ${hue.badge}`}>
-                    {group.mics.length}
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <span className={`rounded-full border border-stone-700/25 px-1.5 py-0.5 text-[8px] tabular-nums ${hue.badge}`}>
+                      {group.mics.length}
+                    </span>
+                    <DrawerHandle accent={hue.accent} />
                   </span>
 
-                  <DrawerHandle accent={hue.accent} />
-
-                  {/* Active indicator dot */}
                   {hasSelected && !isOpen && (
-                    <span className="absolute right-1.5 top-1.5 led led-green" />
+                    <span className="absolute right-1 top-1 led led-green" />
                   )}
                 </button>
 
                 {/* Drawer interior (slides open below/replaces the face) */}
                 <SlidingDrawer open={isOpen}>
-                  <div className="locker-drawer-interior rounded-[3px] border border-stone-800/20 px-2.5 pb-2.5 pt-2">
+                  <div className="locker-drawer-interior rounded-[3px] border border-stone-800/20 px-2 pb-2 pt-1.5">
                     {/* Interior shelf label */}
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.1em]" style={{ color: hue.accent }}>
@@ -233,7 +233,7 @@ export default function MicLocker({ groups, selectedMic, onSelectMic, onInspect,
                     </div>
 
                     {/* Mics on felt-lined shelf */}
-                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                       {group.mics.map(mic => (
                         <MicSlot
                           key={mic.id}
@@ -251,25 +251,6 @@ export default function MicLocker({ groups, selectedMic, onSelectMic, onInspect,
             );
           })}
 
-          {/* ── Empty filler drawers to complete the last row ── */}
-          {(() => {
-            const closedCount = groups.filter(g => openDrawer !== g.label).length;
-            const openCount = groups.filter(g => openDrawer === g.label).length;
-            // Open drawers span full width (each = one full row), so only closed drawers matter for remainder
-            const cols = 5; // lg breakpoint — smaller breakpoints naturally wrap
-            const remainder = (closedCount + openCount) % cols;
-            const fillers = remainder === 0 ? 0 : cols - remainder;
-            return Array.from({ length: fillers }, (_, i) => (
-              <div key={`empty-${i}`} className="locker-drawer flex flex-col items-center justify-center gap-1 rounded-[3px] border border-stone-800/15 py-3 px-2 opacity-40">
-                <svg width="20" height="28" viewBox="0 0 32 48" fill="none" className="h-7 w-5 opacity-30">
-                  <rect x="10" y="12" width="12" height="20" rx="2" fill="#71717a" fillOpacity={0.1} stroke="#71717a" strokeOpacity={0.12} strokeWidth={0.8} />
-                  <line x1="16" y1="32" x2="16" y2="40" stroke="#71717a" strokeOpacity={0.1} strokeWidth={1} />
-                </svg>
-                <span className="text-[9px] text-stone-700/50 italic">empty</span>
-                <DrawerHandle accent="#71717a" />
-              </div>
-            ));
-          })()}
         </div>
       </div>
     </section>
@@ -307,7 +288,7 @@ function MicSlot({
       <button
         type="button"
         onClick={onSelect}
-        className="relative mb-1.5 flex h-14 w-10 cursor-pointer items-center justify-center transition-all duration-200"
+        className="relative mb-1 flex h-10 w-7 cursor-pointer items-center justify-center transition-all duration-200"
         aria-label={`Select ${mic.name}`}
       >
         {/* Foam recess behind mic */}
@@ -323,7 +304,7 @@ function MicSlot({
       </button>
 
       {/* Mic name */}
-      <span className="mb-0.5 block w-full truncate text-center text-[9px] font-medium leading-tight" style={{ color: selected ? 'var(--sa-cream)' : 'var(--sa-cream-dim)' }}>
+      <span className="mb-0.5 block w-full truncate text-center text-[8px] font-medium leading-tight" style={{ color: selected ? 'var(--sa-cream)' : 'var(--sa-cream-dim)' }}>
         {mic.name}
       </span>
 

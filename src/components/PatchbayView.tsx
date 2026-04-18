@@ -492,18 +492,18 @@ function StackedBayFace({
       <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
         {segments.map((segment) => {
           const content = segment.subLabels ? (
-            <div className={`rounded-md px-0.5 py-1 text-center ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
-              <div className="text-[8px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-              <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+            <div className={`rounded-[3px] border px-1 py-1 text-center shadow-sm ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
+              <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+              <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
             </div>
           ) : (
-            <span className={`block truncate rounded-[2px] px-0.5 py-1.5 text-center text-[8px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : ''}`} title={segment.label}>
+            <span className={`block truncate rounded-[3px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-sm ${bayToneClasses[segment.tone].strip} ${activeSegmentId === segment.id ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: activeSegmentId === segment.id ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
               {segment.label}
             </span>
           );
 
           return onClick ? (
-            <button key={segment.id} type="button" onClick={() => onClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }} {...segmentButtonProps}>
+            <button key={segment.id} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }} {...segmentButtonProps}>
               {content}
             </button>
           ) : (
@@ -554,7 +554,7 @@ function StackedBayFace({
         const hasPair = Boolean(topEntries[index] && bottomEntries[index]);
         return (
           <div key={`bridge-${index}`} className="flex justify-center">
-            <span className={`h-3 w-px ${bridgeClassForColumn(hasPair)}`} />
+            <span className={`h-2 w-px ${bridgeClassForColumn(hasPair)}`} />
           </div>
         );
       })}
@@ -602,30 +602,30 @@ function PhysicalPairedBay({
   const bottomEntries = expandBaySegments(bottomSegments);
 
   return (
-    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2.5 py-2">
-      <div className="mb-1.5 flex items-center justify-between text-silkscreen-faint text-[8px]">
+    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2 py-1.5">
+      <div className="mb-1 flex items-center justify-between text-silkscreen-faint text-[7px]">
         <span>Top row</span>
         <span>{normalModeMeta[normalMode].label}</span>
         <span>Bottom row</span>
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
           {topSegments.map((segment) => {
             const isOpen = openSegmentId === segment.id;
               const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
               const content = segment.subLabels ? (
-                <div className={`rounded-[2px] px-0.5 py-1 text-center ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
-                  <div className="text-[8px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-                  <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+                <div className={`rounded-[3px] border px-1 py-1 text-center shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
+                  <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+                  <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
                 </div>
               ) : (
-                <span className={`block truncate rounded-[2px] px-0.5 py-1.5 text-center text-[8px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
+                <span className={`block truncate rounded-[3px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
                   {segment.label}
                 </span>
               );
 
               return onSegmentClick ? (
-                <button key={`top-${segment.id}`} type="button" onClick={() => onSegmentClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
+                <button key={`top-${segment.id}`} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onSegmentClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
                   {content}
                 </button>
               ) : (
@@ -647,14 +647,14 @@ function PhysicalPairedBay({
               const bottom = bottomEntries[index] ?? null;
 
               return (
-                <div key={index} className="flex flex-col items-center gap-1">
+                <div key={index} className="flex flex-col items-center gap-0.5">
                   <span
                     className={`tt-jack flex items-center justify-center tt-jack-top ${top ? '' : 'opacity-40'} ${onSegmentClick && top ? 'cursor-pointer' : ''}`}
                     onClick={onSegmentClick && top ? () => onSegmentClick(top.segmentId) : undefined}
                   >
                     {top?.number ?? ''}
                   </span>
-                  <span className={`h-3 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/60' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/50' : 'bg-zinc-700/25') : 'bg-zinc-800/30'}`} />
+                  <span className={`h-2 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/60' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/50' : 'bg-zinc-700/25') : 'bg-zinc-800/30'}`} />
                   <span
                     className={`tt-jack flex items-center justify-center tt-jack-bottom ${bottom ? '' : 'opacity-40'} ${onSegmentClick && bottom ? 'cursor-pointer' : ''}`}
                     onClick={onSegmentClick && bottom ? () => onSegmentClick(bottom.segmentId) : undefined}
@@ -671,18 +671,18 @@ function PhysicalPairedBay({
               const isOpen = openSegmentId === segment.id;
               const ringClass = isOpen ? `ring-1 ring-inset ${bayToneClasses[segment.tone].ring}` : '';
               const content = segment.subLabels ? (
-                <div className={`rounded-[2px] px-0.5 py-1 text-center ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
-                  <div className="text-[8px] uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
-                  <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
+                <div className={`rounded-[3px] border px-1 py-1 text-center shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
+                  <div className="text-[9px] font-semibold uppercase tracking-[0.08em] leading-tight">{segment.label}</div>
+                  <div className="flex justify-around text-[7px] uppercase tracking-[0.06em] leading-tight opacity-80">{segment.subLabels.map((sub) => <span key={sub}>{sub}</span>)}</div>
                 </div>
               ) : (
-                <span className={`block truncate rounded-[2px] px-0.5 py-1.5 text-center text-[8px] uppercase tracking-[0.08em] ${bayToneClasses[segment.tone].strip} ${ringClass}`} title={segment.label}>
+                <span className={`block truncate rounded-[3px] border px-1 py-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.08em] shadow-sm ${bayToneClasses[segment.tone].strip} ${ringClass || 'border-zinc-700/35'}`} title={segment.label} style={{ backgroundColor: isOpen ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.18)' }}>
                   {segment.label}
                 </span>
               );
 
               return onSegmentClick ? (
-                <button key={`bottom-${segment.id}`} type="button" onClick={() => onSegmentClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
+                <button key={`bottom-${segment.id}`} type="button" className="transition-transform hover:-translate-y-[0.5px]" onClick={() => onSegmentClick(segment.id)} style={{ gridColumn: `span ${segment.count} / span ${segment.count}` }}>
                   {content}
                 </button>
               ) : (
