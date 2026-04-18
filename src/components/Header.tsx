@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { Perspective, StudioMode } from '../types/studio';
 import type { DemoState } from '../hooks/useDemoWalkthrough';
 
@@ -40,6 +41,12 @@ const headerTheme: Record<Perspective, { bar: string; active: string; chip: stri
 
 export default function Header({ perspective, mode, searchQuery, onSearch, onPerspective, onMode, demoState, demoNarration, onStartDemo, onCancelDemo }: Props) {
   const theme = headerTheme[perspective];
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
 
   return (
     <header className={`mat-brushed-dark mat-rack-panel border-b px-4 py-3 transition-colors duration-500 ${theme.bar}`}>
@@ -51,69 +58,71 @@ export default function Header({ perspective, mode, searchQuery, onSearch, onPer
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
-          <label className={`flex items-center gap-2 mat-recess rounded-[3px] border px-3 py-1.5 transition-colors duration-500 ${theme.bar}`}>
-            <span className="text-silkscreen-faint text-[8px]">Jump</span>
-            <input
-              value={searchQuery}
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="gear, role, topology"
-              className="w-40 bg-transparent text-xs outline-none placeholder:text-zinc-600 sm:w-48"
-              style={{ color: 'var(--sa-cream-dim)' }}
-            />
-          </label>
-          <div className={`flex items-center gap-2 mat-recess rounded-[3px] border px-2 py-1 transition-colors duration-500 ${theme.bar}`}>
-            <span className="text-silkscreen-faint text-[8px]">Mode</span>
+        <div className="flex w-full items-center gap-1 overflow-x-auto pb-0.5 sm:justify-center">
+          <div className={`flex items-center gap-1 mat-recess rounded-[3px] border px-1.5 py-1 transition-colors duration-500 ${theme.bar}`}>
+            <button
+              type="button"
+              onClick={() => setSearchOpen((value) => !value)}
+              className="flex items-center gap-1 rounded-[2px] px-1 py-0.5 text-[10px] font-medium text-zinc-200"
+            >
+              <span aria-hidden="true">⌕</span>
+              <span>Jump</span>
+            </button>
+            {searchOpen && (
+              <input
+                ref={searchRef}
+                value={searchQuery}
+                onChange={(event) => onSearch(event.target.value)}
+                placeholder="search"
+                className="w-24 bg-transparent text-[10px] outline-none placeholder:text-zinc-600 sm:w-32"
+                style={{ color: 'var(--sa-cream-dim)' }}
+              />
+            )}
+          </div>
+
+          <div className={`flex items-center gap-0.5 mat-recess rounded-[3px] border px-1 py-0.5 transition-colors duration-500 ${theme.bar}`}>
             {(['tracking', 'mixing'] as StudioMode[]).map(m => (
               <button
                 key={m}
                 onClick={() => onMode(m)}
-                className={`rounded-[3px] px-3 py-1 text-xs font-medium transition ${
+                className={`rounded-[2px] px-1.5 py-0.5 text-[9px] font-medium transition ${
                   mode === m
                     ? 'border border-zinc-400/20 bg-zinc-400/10 text-zinc-100'
                     : 'border border-transparent text-zinc-500 hover:text-zinc-300'
                 }`}
               >
-                {m.charAt(0).toUpperCase() + m.slice(1)}
+                {m === 'tracking' ? 'Track' : 'Mix'}
               </button>
             ))}
           </div>
 
-          <div className={`flex items-center gap-2 mat-recess rounded-[3px] border px-2 py-1 transition-colors duration-500 ${theme.bar}`}>
-            <span className="text-silkscreen-faint text-[8px]">Perspective</span>
+          <div className={`flex items-center gap-0.5 mat-recess rounded-[3px] border px-1 py-0.5 transition-colors duration-500 ${theme.bar}`}>
             {perspectives.map(p => (
               <button
                 key={p.key}
                 onClick={() => onPerspective(p.key)}
-                className={`rounded-[3px] px-3 py-1 text-xs font-medium transition ${
+                className={`rounded-[2px] px-1.5 py-0.5 text-[9px] font-medium transition ${
                   perspective === p.key
                     ? theme.active
                     : 'border border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {p.label}
+                {p.key === 'engineer' ? 'Eng' : p.key === 'musician' ? 'Mus' : 'Tech'}
               </button>
             ))}
           </div>
-          <div className={`text-silkscreen text-[8px] ${theme.chip}`}>{perspective} lens</div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={demoState === 'running' ? onCancelDemo : onStartDemo}
-              className={`mat-recess rounded-[3px] border px-3 py-1 text-xs font-medium transition ${
-                demoState === 'running'
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-200 animate-pulse'
-                  : 'border-zinc-600/20 text-zinc-400 hover:border-zinc-500/30 hover:text-zinc-200'
-              }`}
-            >
-              {demoState === 'running'
-                ? 'Stop Demo'
-                : mode === 'mixing'
-                  ? 'Mixing Demo'
-                  : 'Tracking Demo'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={demoState === 'running' ? onCancelDemo : onStartDemo}
+            className={`ml-auto mat-recess rounded-[3px] border px-2 py-0.5 text-[9px] font-medium transition sm:ml-0 ${
+              demoState === 'running'
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-200 animate-pulse'
+                : 'border-zinc-600/20 text-zinc-400 hover:border-zinc-500/30 hover:text-zinc-200'
+            }`}
+          >
+            {demoState === 'running' ? 'Stop' : 'Demo'}
+          </button>
         </div>
       </div>
 

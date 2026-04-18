@@ -169,32 +169,14 @@ const normalModeMeta: Record<BayNormalMode, { label: string; badge: string; brid
   },
 };
 
-function rowNormalMode(rowId: string): BayNormalMode {
-  switch (rowId) {
-    case 'row-mic-ties':
-      return 'full-normal';
-    case 'row-preamp-out':
-    case 'row-aurora-da-out':
-    case 'row-insert-send':
-      return 'half-normal';
-    case 'row-preamp-in':
-    case 'row-tilt-out':
-    case 'row-aurora-da-otb':
-    case 'row-api-mix-out':
-      return 'full-normal';
-    default:
-      return 'patch-only';
-  }
-}
-
 function SectionMarker({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="mb-2 px-0.5">
-      <div className="flex items-center gap-3">
-        <div className="text-silkscreen text-[8px]">{title}</div>
+    <div className="mb-1 px-0.5">
+      <div className="flex items-center gap-2">
+        <div className="text-silkscreen text-[7px]">{title}</div>
         <div className="h-px flex-1" style={{ background: `linear-gradient(to right, var(--sa-lens-border), transparent)` }} />
       </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-zinc-600">{subtitle}</p>
+      <p className="mt-0.5 text-[10px] leading-snug text-zinc-600">{subtitle}</p>
     </div>
   );
 }
@@ -353,14 +335,13 @@ function rowActive(rowId: string, mode: StudioMode, selectedMic: Microphone | nu
 
 function RowShell({ rowId, order, label, active, isNext, mode, children }: { rowId: string; order: number | string; label: string; active: boolean; isNext: boolean; mode: StudioMode; children: ReactNode }) {
   const isFocused = modeFocusedRows[mode].has(rowId);
-  const normalMode = rowNormalMode(rowId);
   const ledClass = isNext ? 'led led-amber' : active ? 'led led-green' : 'led led-off';
 
   return (
     <section
       data-row-id={rowId}
       className={`
-        mat-brushed-dark mat-rack-panel relative overflow-hidden rounded-[3px] border px-3 py-2 md:px-4 md:py-3
+        mat-brushed-dark mat-rack-panel relative overflow-hidden rounded-[3px] border px-2 py-1.5 md:px-3 md:py-2
         transition-opacity duration-500
         ${rowShellTone[rowId] ?? rowShellTone['row-mic-ties']}
         ${isFocused ? 'opacity-100' : 'opacity-[0.88]'}
@@ -372,7 +353,6 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
         backgroundImage: isFocused ? 'linear-gradient(180deg, var(--sa-lens-wash) 0%, transparent 40%)' : undefined,
       }}
     >
-      {/* Corner screwheads */}
       <div className="pointer-events-none absolute inset-0">
         <span className="screwhead absolute left-2 top-2" />
         <span className="screwhead absolute right-2 top-2" />
@@ -380,20 +360,10 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
         <span className="screwhead absolute bottom-2 right-2" />
       </div>
 
-      {/* Panel header — engraved silkscreen label strip */}
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className={ledClass} />
-            <span className="text-silkscreen text-[9px]">{order}</span>
-            <span className="text-silkscreen text-[9px]">{label}</span>
-          </div>
-          <div className="mt-1 flex flex-wrap gap-1">
-            <span className={`mat-recess rounded-[2px] px-2 py-0.5 text-[8px] text-silkscreen-faint ${normalModeMeta[normalMode].badge}`}>{normalModeMeta[normalMode].label}</span>
-            {active && <span className="mat-recess rounded-[2px] px-2 py-0.5 text-[8px] text-silkscreen-faint">Signal live</span>}
-            {isFocused && <span className="mat-recess rounded-[2px] px-2 py-0.5 text-[8px] text-engraved">{mode === 'tracking' ? 'Capture focus' : 'Mix focus'}</span>}
-          </div>
-        </div>
+      <div className="mb-1 flex items-center gap-2">
+        <span className={ledClass} />
+        <span className="text-silkscreen text-[8px]">{order}</span>
+        <span className="text-silkscreen text-[8px]">{label}</span>
       </div>
       {children}
     </section>
@@ -402,7 +372,7 @@ function RowShell({ rowId, order, label, active, isNext, mode, children }: { row
 
 function DetailTray({ title, caption, children, toneClass, position = 'below', onClose }: { title: string; caption: string; children: ReactNode; toneClass: string; position?: 'above' | 'below'; onClose?: () => void }) {
   return (
-    <div className={`${position === 'above' ? 'mb-2' : 'mt-2'} mat-recess rounded-[3px] p-2.5 md:p-3 ${toneClass}`}>
+    <div className={`${position === 'above' ? 'mb-1.5' : 'mt-1.5'} mat-recess rounded-[3px] p-2 md:p-2.5 ${toneClass}`}>
       <div className="mb-2">
         <div className="flex items-center justify-between">
           <div className="hidden text-silkscreen-faint text-[8px] sm:block">Focused view</div>
@@ -457,6 +427,7 @@ function StackedBayFace({
   onBottomJackClick,
   segmentButtonProps,
   normalMode = 'patch-only',
+  layout = 'full',
 }: {
   rowId: string;
   topSegments: PairedBaySegment[];
@@ -471,6 +442,7 @@ function StackedBayFace({
   onBottomJackClick?: (segmentId: string) => void;
   segmentButtonProps?: SegmentButtonProps;
   normalMode?: BayNormalMode;
+  layout?: 'full' | 'single-bottom';
 }) {
   const topEntries = expandBaySegments(topSegments);
   const bottomEntries = expandBaySegments(bottomSegments);
@@ -562,19 +534,23 @@ function StackedBayFace({
   );
 
   return (
-    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2.5 py-2">
-      <div className="mb-1.5 flex items-center justify-between text-silkscreen-faint text-[8px]">
-        <span>Top row</span>
-        <span>{normalModeMeta[normalMode].label}</span>
-        <span>Bottom row</span>
-      </div>
-      <div className="space-y-1.5">
-        {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
-        {renderSocketRow(topEntries, selectedTop, 'top')}
-        {renderBridgeRow()}
-        {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
-        {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
-      </div>
+    <div className="mat-brushed-mid mat-recess rounded-[3px] px-2 py-1.5">
+      {layout === 'single-bottom' ? (
+        <div className="space-y-1">
+          {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
+          {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+          <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {renderStrip(topSegments, openTopSegmentId, onTopSegmentClick)}
+          {renderSocketRow(topEntries, selectedTop, 'top')}
+          {renderBridgeRow()}
+          {renderSocketRow(bottomEntries, selectedBottom, 'bottom')}
+          {renderStrip(bottomSegments, openBottomSegmentId ?? openTopSegmentId, onBottomSegmentClick ?? onTopSegmentClick)}
+          <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -603,11 +579,6 @@ function PhysicalPairedBay({
 
   return (
     <div className="mat-brushed-mid mat-recess rounded-[3px] px-2 py-1.5">
-      <div className="mb-1 flex items-center justify-between text-silkscreen-faint text-[7px]">
-        <span>Top row</span>
-        <span>{normalModeMeta[normalMode].label}</span>
-        <span>Bottom row</span>
-      </div>
       <div className="space-y-1">
         <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${totalColumns}, minmax(0, 1fr))` }}>
           {topSegments.map((segment) => {
@@ -654,7 +625,7 @@ function PhysicalPairedBay({
                   >
                     {top?.number ?? ''}
                   </span>
-                  <span className={`h-2 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/60' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/50' : 'bg-zinc-700/25') : 'bg-zinc-800/30'}`} />
+                  <span className={`h-1.5 w-px ${top && bottom ? (normalMode === 'full-normal' ? 'bg-emerald-300/60' : normalMode === 'half-normal' ? 'border-l border-dashed border-amber-200/50' : 'bg-zinc-700/25') : 'bg-zinc-800/30'}`} />
                   <span
                     className={`tt-jack flex items-center justify-center tt-jack-bottom ${bottom ? '' : 'opacity-40'} ${onSegmentClick && bottom ? 'cursor-pointer' : ''}`}
                     onClick={onSegmentClick && bottom ? () => onSegmentClick(bottom.segmentId) : undefined}
@@ -698,6 +669,7 @@ function PhysicalPairedBay({
             )}
           </div>
         </div>
+        <div className="pt-0.5 text-center text-[7px] lowercase tracking-[0.08em] text-zinc-600">{normalModeMeta[normalMode].label}</div>
     </div>
   );
 }
@@ -1293,7 +1265,7 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
   };
 
   return (
-    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4">
+    <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto px-2 py-2 sm:px-3 sm:py-2.5">
       <SignalFlowOverlay
         containerRef={scrollContainerRef}
         perspective={perspective}
@@ -1361,19 +1333,19 @@ export default function PatchbayView({ perspective, mode, selectedMic, selectedP
 
             return (
               <div key={row.id} className="space-y-2">
-                <SectionMarker title="Source and capture" subtitle="Tie lines carry the mic selection to a preamp input. Choose the front-end that shapes the source." />
-                <RowShell rowId={row.id} order="0" label="MIC TIE LINES / PREAMP INPUTS" active={active} isNext={isNext} mode={mode}>
+                <SectionMarker title="Source and capture" subtitle="Choose the preamp entry point for the source you opened above." />
+                <RowShell rowId={row.id} order="0" label="PREAMP INPUTS" active={active} isNext={isNext} mode={mode}>
                   <StackedBayFace
                     rowId="row-mic-ties"
                     topSegments={tieLineSegments}
                     bottomSegments={preampInputSegments}
-                    selectedTopPoints={selectedMicPoint > 0 && selectedMicPoint <= BAY_ROW_LENGTH ? [selectedMicPoint] : []}
-                    selectedBottomPoints={selectedPreampPoints}
+                    selectedBottomPoints={selectedMicPoint > 0 && selectedMicPoint <= BAY_ROW_LENGTH ? [selectedMicPoint, ...selectedPreampPoints] : selectedPreampPoints}
                     openBottomSegmentId={openSection}
                     onBottomSegmentClick={(sectionId) => setOpenSection(row.id, sectionId)}
                     onBottomJackClick={(segmentId) => setOpenSection(row.id, segmentId)}
                     segmentButtonProps={{ 'data-row-section': row.id }}
                     normalMode="patch-only"
+                    layout="single-bottom"
                   />
 
                   {preampInputSectionPreamps && preampInputSectionPreamps.length > 0 && (
